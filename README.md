@@ -1,6 +1,6 @@
 # FlickX
 
-A Letterboxd-like movie discovery app with a React Native (Expo) mobile frontend and a Node.js/Express + Sequelize backend.
+A movie discovery app with a React Native (Expo) mobile frontend and a Node.js/Express + Sequelize backend.
 
 ## Prerequisites
 
