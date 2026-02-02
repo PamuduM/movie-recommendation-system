@@ -2,12 +2,29 @@
 import axios from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 import { getAuthToken } from './authStorage';
 
+const getDevHost = () => {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    Constants.expoGoConfig?.hostUri ??
+    Constants.manifest?.debuggerHost;
+  if (!hostUri) return null;
+  return hostUri.split(':')[0];
+};
+
 // Android Emulator: 10.0.2.2 points to the host machine.
-const API_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-const API_BASE_URL = `http://${API_HOST}:5000/api`; // Update with production URL as needed
+const API_HOST =
+  Platform.OS === 'android'
+    ? (Constants.isDevice ? getDevHost() ?? 'localhost' : '10.0.2.2')
+    : Platform.OS === 'web'
+      ? 'localhost'
+      : getDevHost() ?? 'localhost';
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? `http://${API_HOST}:5000/api`; // Update with production URL as needed
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -22,6 +39,19 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (__DEV__) {
+      const baseURL = error?.config?.baseURL;
+      const url = error?.config?.url;
+      const method = error?.config?.method;
+      console.log('API request failed:', { method, baseURL, url, message: error?.message });
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Example: Fetch trending movies
 export const fetchTrendingMovies = async () => {
