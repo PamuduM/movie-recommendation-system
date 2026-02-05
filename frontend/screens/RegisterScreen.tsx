@@ -53,8 +53,6 @@ const RegisterScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sign Up</Text>
-
       <TextInput
         style={styles.input}
         value={username}
@@ -98,7 +96,6 @@ const RegisterScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginBottom: 12 },
   error: { color: '#b00020', marginBottom: 12, textAlign: 'center' },
   linkWrap: { marginTop: 16, alignItems: 'center' },

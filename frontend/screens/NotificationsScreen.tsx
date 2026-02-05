@@ -29,7 +29,6 @@ const NotificationsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Notifications</Text>
       {!user?.id ? <Text>Log in to see your notifications.</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <FlatList
@@ -43,7 +42,6 @@ const NotificationsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   error: { color: '#b00020', marginBottom: 12 },
 });
 

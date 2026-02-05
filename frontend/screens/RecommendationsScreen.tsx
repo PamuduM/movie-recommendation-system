@@ -14,7 +14,6 @@ const RecommendationsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Recommended Movies</Text>
       {!user?.id ? <Text>Log in to get personalized recommendations.</Text> : null}
       <FlatList
         data={recommendations}
@@ -27,7 +26,6 @@ const RecommendationsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
 });
 
 export default RecommendationsScreen;

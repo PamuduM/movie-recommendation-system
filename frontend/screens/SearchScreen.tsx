@@ -15,7 +15,6 @@ const SearchScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Search Movies</Text>
       <TextInput
         style={styles.input}
         value={query}
@@ -34,7 +33,6 @@ const SearchScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 8, marginVertical: 8 },
 });
 

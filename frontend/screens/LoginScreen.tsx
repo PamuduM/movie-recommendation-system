@@ -39,7 +39,6 @@ const LoginScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
       {user ? <Text style={styles.success}>Logged in as {user.username}</Text> : null}
 
       <TextInput
@@ -75,7 +74,6 @@ const LoginScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginBottom: 12 },
   error: { color: '#b00020', marginBottom: 12, textAlign: 'center' },
   success: { color: '#0a7', marginBottom: 12, textAlign: 'center' },

@@ -46,8 +46,6 @@ const ProfileScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
-
       {user ? (
         <View style={styles.card}>
           <Text style={styles.label}>Username</Text>
@@ -93,7 +91,6 @@ const ProfileScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   card: {
     borderWidth: 1,
     borderColor: '#e0e0e0',

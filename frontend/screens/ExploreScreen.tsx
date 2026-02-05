@@ -13,6 +13,7 @@ import {
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchTmdbDiscover, fetchTmdbGenres, searchTmdbMovies } from '@/services/api';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type TmdbMovie = {
   id: number;
@@ -37,6 +38,33 @@ const SORT_MAP: Record<string, string> = {
 };
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  if (!uri || failed) {
+    return (
+      <View style={[styles.rowPoster, styles.posterFallback]}>
+        <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.posterStack}>
+      <View style={[styles.rowPoster, styles.posterFallback]}>
+        <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
+      </View>
+      <Image
+        source={{ uri: `${TMDB_IMAGE_BASE}${uri}` }}
+        style={[styles.rowPoster, styles.posterImage, { opacity: loaded ? 1 : 0 }]}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </View>
+  );
+};
 
 const ExploreScreen = () => {
   const colorScheme = useColorScheme();
@@ -114,12 +142,12 @@ const ExploreScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Explore</Text>
-        <Text style={[styles.subtitle, { color: colors.icon }]}>Search movies</Text>
+      <View style={styles.pageIconRow}>
+        <MaterialIcons size={24} name="search" color={colors.icon} />
       </View>
 
       <View style={[styles.searchBar, { borderColor: colors.icon }]}> 
+        <MaterialIcons size={18} name="search" color={colors.icon} style={styles.searchIcon} />
         <TextInput
           placeholder="Search movies"
           placeholderTextColor={colors.icon}
@@ -159,22 +187,14 @@ const ExploreScreen = () => {
         <View style={styles.center}>
           <ActivityIndicator color={colors.tint} />
         </View>
-      ) : (
+      ) : query.trim() ? (
         <FlatList
-          data={filtered}
+          data={movies}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <View style={styles.rowCard}>
-              {item.poster_path ? (
-                <Image source={{ uri: `${TMDB_IMAGE_BASE}${item.poster_path}` }} style={styles.rowPoster} />
-              ) : (
-                <View style={[styles.rowPoster, styles.posterFallback]}>
-                  <Text style={[styles.posterFallbackText, { color: colors.text }]}>
-                    {item.title?.slice(0, 2).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <Poster uri={item.poster_path} title={item.title} />
               <View style={styles.rowInfo}>
                 <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
                   {item.title}
@@ -189,16 +209,14 @@ const ExploreScreen = () => {
             <Text style={[styles.emptyText, { color: colors.icon }]}>No results found.</Text>
           }
         />
-      )}
+      ) : null}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: '700' },
-  subtitle: { marginTop: 6, fontSize: 14 },
+  pageIconRow: { alignItems: 'center', paddingTop: 12 },
   searchBar: {
     marginHorizontal: 20,
     marginTop: 8,
@@ -206,8 +224,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  searchInput: { fontSize: 16 },
+  searchIcon: { marginRight: 2 },
+  searchInput: { fontSize: 16, marginLeft: 8, flex: 1 },
   filtersRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -228,8 +250,10 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 20, paddingVertical: 16, paddingBottom: 32 },
   rowCard: { flexDirection: 'row', marginBottom: 16 },
   rowPoster: { width: 64, height: 96, borderRadius: 12, backgroundColor: '#1f1f1f' },
+  posterStack: { width: 64, height: 96 },
+  posterImage: { position: 'absolute', top: 0, left: 0 },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
-  posterFallbackText: { fontSize: 16, fontWeight: '700' },
+  posterFallbackText: { fontSize: 16, fontWeight: '700', color: '#fff' },
   rowInfo: { marginLeft: 12, flex: 1, justifyContent: 'center' },
   movieTitle: { fontSize: 16, fontWeight: '600' },
   movieMeta: { marginTop: 6, fontSize: 12 },

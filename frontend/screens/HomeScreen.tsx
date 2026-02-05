@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -26,6 +27,26 @@ type TmdbResponse = {
 };
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (!uri || failed) {
+    return (
+      <View style={[styles.poster, styles.posterFallback]}>
+        <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: `${TMDB_IMAGE_BASE}${uri}` }}
+      style={styles.poster}
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 const HomeScreen = () => {
   const colorScheme = useColorScheme();
@@ -89,16 +110,10 @@ const HomeScreen = () => {
     }
   };
 
-  const headerSubtitle = useMemo(() => {
-    if (!movies.length) return 'Discover trending movies';
-    return `${movies.length} movies trending now`;
-  }, [movies.length]);
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Trending Movies</Text>
-        <Text style={[styles.subtitle, { color: colors.icon }]}>{headerSubtitle}</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
+      <View style={styles.brandWrap}>
+        <Text style={[styles.brandTitle, { color: colors.text }]}>FlickX</Text>
       </View>
 
       {loading ? (
@@ -132,15 +147,7 @@ const HomeScreen = () => {
           }
           renderItem={({ item }) => (
             <View style={styles.card}>
-              {item.poster_path ? (
-                <Image source={{ uri: `${TMDB_IMAGE_BASE}${item.poster_path}` }} style={styles.poster} />
-              ) : (
-                <View style={[styles.poster, styles.posterFallback]}>
-                  <Text style={[styles.posterFallbackText, { color: colors.text }]}>
-                    {item.title?.slice(0, 2).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <Poster uri={item.poster_path} title={item.title} />
               <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
                 {item.title}
               </Text>
@@ -151,21 +158,20 @@ const HomeScreen = () => {
           )}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 },
-  title: { fontSize: 24, fontWeight: '700' },
-  subtitle: { marginTop: 6, fontSize: 14 },
+  brandWrap: { alignItems: 'center', paddingTop: 16, paddingBottom: 8 },
+  brandTitle: { fontSize: 28, fontWeight: '800' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   card: { width: 140, marginHorizontal: 8 },
   poster: { width: 140, height: 210, borderRadius: 16, backgroundColor: '#1f1f1f' },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
-  posterFallbackText: { fontSize: 22, fontWeight: '700' },
+  posterFallbackText: { fontSize: 22, fontWeight: '700', color: '#fff' },
   movieTitle: { marginTop: 10, fontSize: 14, fontWeight: '600' },
   movieMeta: { marginTop: 4, fontSize: 12 },
   footer: { paddingHorizontal: 16, paddingVertical: 12 },

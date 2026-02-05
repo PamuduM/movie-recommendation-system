@@ -52,8 +52,6 @@ const VerifyEmailScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Verify Email</Text>
-
       <TextInput
         style={styles.input}
         value={email}
@@ -83,7 +81,6 @@ const VerifyEmailScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginBottom: 12 },
   divider: { height: 24 },
   error: { color: '#b00020', marginTop: 12, textAlign: 'center' },
