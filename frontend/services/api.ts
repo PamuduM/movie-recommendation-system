@@ -60,8 +60,13 @@ export const fetchTrendingMovies = async () => {
 };
 
 // TMDB proxy endpoints
-export const fetchTmdbTrendingMovies = async (timeWindow: 'day' | 'week' = 'week') => {
-  const response = await api.get('/tmdb/trending', { params: { time_window: timeWindow } });
+export const fetchTmdbTrendingMovies = async (
+  timeWindow: 'day' | 'week' = 'week',
+  page = 1
+) => {
+  const response = await api.get('/tmdb/trending', {
+    params: { time_window: timeWindow, page },
+  });
   return response.data;
 };
 

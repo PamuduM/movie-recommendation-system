@@ -21,6 +21,8 @@ type TmdbMovie = {
 
 type TmdbResponse = {
   results: TmdbMovie[];
+  page?: number;
+  total_pages?: number;
 };
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
@@ -29,16 +31,30 @@ const HomeScreen = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [movies, setMovies] = useState<TmdbMovie[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPage = async (nextPage: number, replace = false) => {
+    const data: TmdbResponse = await fetchTmdbTrendingMovies('week', nextPage);
+    if (Array.isArray(data?.results)) {
+      setMovies((prev) => (replace ? data.results : [...prev, ...data.results]));
+      const totalPages = data?.total_pages ?? nextPage;
+      setHasMore(nextPage < totalPages);
+      setPage(nextPage);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        const data: TmdbResponse = await fetchTmdbTrendingMovies('week');
-        if (mounted && Array.isArray(data?.results)) {
-          setMovies(data.results);
-        }
+        await loadPage(1, true);
+        if (mounted) setError(null);
+      } catch (err) {
+        if (mounted) setError('Failed to load trending movies');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -48,6 +64,30 @@ const HomeScreen = () => {
       mounted = false;
     };
   }, []);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      await loadPage(1, true);
+      setError(null);
+    } catch (err) {
+      setError('Failed to refresh trending movies');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || loading || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await loadPage(page + 1);
+    } catch (err) {
+      setError('Failed to load more trending movies');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const headerSubtitle = useMemo(() => {
     if (!movies.length) return 'Discover trending movies';
@@ -72,6 +112,24 @@ const HomeScreen = () => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.6}
+          refreshing={loading}
+          onRefresh={handleRefresh}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={[styles.emptyText, { color: colors.icon }]}>
+                {error ?? 'No trending movies found'}
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footer}>
+                <ActivityIndicator color={colors.tint} />
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <View style={styles.card}>
               {item.poster_path ? (
@@ -110,6 +168,8 @@ const styles = StyleSheet.create({
   posterFallbackText: { fontSize: 22, fontWeight: '700' },
   movieTitle: { marginTop: 10, fontSize: 14, fontWeight: '600' },
   movieMeta: { marginTop: 4, fontSize: 12 },
+  footer: { paddingHorizontal: 16, paddingVertical: 12 },
+  emptyText: { fontSize: 14 },
 });
 
 export default HomeScreen;

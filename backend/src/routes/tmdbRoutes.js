@@ -28,9 +28,9 @@ const withKey = (params = {}) => ({
 
 router.get('/trending', requireApiKey, async (req, res) => {
   try {
-    const { time_window = 'week' } = req.query;
+    const { time_window = 'week', page = 1 } = req.query;
     const response = await tmdbClient.get(`/trending/movie/${time_window}`, {
-      params: withKey(),
+      params: withKey({ page }),
     });
     res.json(response.data);
   } catch (err) {
