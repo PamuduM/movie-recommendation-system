@@ -32,8 +32,9 @@ build/
 # Coverage
 coverage/
 
-# IDE
-.vscode/
+# IDE - Allow VSCode configuration for project setup
+# .vscode/ is commented out to allow sharing VSCode tasks and launch configs
+# .vscode/
 .idea/
 
 # Misc
