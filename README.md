@@ -11,7 +11,9 @@ A movie discovery app with a React Native (Expo) mobile frontend and a Node.js/E
 
 For detailed instructions on running this project in VSCode terminal with tasks and debugging, see **[VSCODE_GUIDE.md](VSCODE_GUIDE.md)**.
 
-**TL;DR**: Open in VSCode and press `Ctrl+Shift+B` (or `Cmd+Shift+B` on Mac) to run the full stack!
+**TL;DR**: 
+- **VSCode Users**: Open in VSCode and press `Ctrl+Shift+B` (or `Cmd+Shift+B` on Mac) to run the full stack!
+- **Terminal Users**: Run `npm run setup` then `npm run dev` from the root directory!
 
 ## Run (local dev)
 

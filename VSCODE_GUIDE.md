@@ -18,6 +18,30 @@ VSCode tasks have been configured to make running this project easy. You can acc
 - Type "Tasks: Run Task"
 - Select the task you want to run
 
+### Even Quicker - Root Level NPM Scripts
+
+For the fastest setup, you can also use root-level npm scripts from the terminal:
+
+```bash
+# Install all dependencies
+npm run setup
+
+# Run full stack (backend + frontend)
+npm run dev
+
+# Run backend only
+npm run start:backend
+
+# Run frontend only
+npm run start:frontend
+
+# Run on Android directly
+npm run android
+
+# Show quick start guide
+npm run quickstart
+```
+
 ### Available Tasks
 
 #### 1. **Install All Dependencies**

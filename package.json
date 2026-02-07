@@ -1,0 +1,32 @@
+{
+  "name": "flickx-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FlickX Movie Recommendation System - Full Stack Application",
+  "scripts": {
+    "setup": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:backend": "cd backend && npm run start",
+    "dev:frontend": "cd frontend && npm start",
+    "start:backend": "cd backend && npm run start",
+    "start:frontend": "cd frontend && npm start",
+    "android": "cd frontend && npm run android",
+    "quickstart": "bash quickstart.sh"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "keywords": [
+    "movie",
+    "recommendation",
+    "react-native",
+    "expo",
+    "nodejs",
+    "express"
+  ],
+  "author": "",
+  "license": "ISC"
+}
