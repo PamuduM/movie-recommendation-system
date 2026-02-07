@@ -1,0 +1,38 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug Backend",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/backend",
+			"runtimeExecutable": "npm",
+			"runtimeArgs": [
+				"run",
+				"start"
+			],
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"skipFiles": [
+				"<node_internals>/**"
+			]
+		},
+		{
+			"name": "Debug Backend (Dev Mode)",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/backend",
+			"runtimeExecutable": "npm",
+			"runtimeArgs": [
+				"run",
+				"dev"
+			],
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"skipFiles": [
+				"<node_internals>/**"
+			]
+		}
+	],
+	"compounds": []
+}
