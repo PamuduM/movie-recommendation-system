@@ -7,7 +7,7 @@
     "setup": "npm run install:backend && npm run install:frontend",
     "install:backend": "cd backend && npm install",
     "install:frontend": "cd frontend && npm install",
-    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev": "echo 'Note: For Windows, use VSCode tasks (Ctrl+Shift+B) instead' && npm run dev:backend & npm run dev:frontend",
     "dev:backend": "cd backend && npm run start",
     "dev:frontend": "cd frontend && npm start",
     "start:backend": "cd backend && npm run start",

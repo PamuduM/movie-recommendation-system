@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # FlickX Quick Start Script for VSCode Terminal
 # This script helps you quickly run the project

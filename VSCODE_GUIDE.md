@@ -26,8 +26,9 @@ For the fastest setup, you can also use root-level npm scripts from the terminal
 # Install all dependencies
 npm run setup
 
-# Run full stack (backend + frontend)
+# Run full stack (backend + frontend) - Mac/Linux
 npm run dev
+# Note: Windows users should use VSCode tasks (Ctrl+Shift+B) instead
 
 # Run backend only
 npm run start:backend
@@ -41,6 +42,8 @@ npm run android
 # Show quick start guide
 npm run quickstart
 ```
+
+**Important for Windows Users**: The `npm run dev` command uses Unix shell operators that may not work correctly on Windows. Please use VSCode tasks instead by pressing `Ctrl+Shift+B` or selecting "Run Full Stack" from the Tasks menu.
 
 ### Available Tasks
 
