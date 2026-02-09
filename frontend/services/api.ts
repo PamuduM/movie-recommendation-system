@@ -31,6 +31,13 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+type UnauthorizedHandler = () => void | Promise<void>;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export const setUnauthorizedHandler = (handler: UnauthorizedHandler | null) => {
+  unauthorizedHandler = handler;
+};
+
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await getAuthToken();
   if (token) {
@@ -43,6 +50,10 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error?.response?.status;
+    if ((status === 401 || status === 403) && unauthorizedHandler) {
+      Promise.resolve(unauthorizedHandler()).catch(() => undefined);
+    }
     if (__DEV__) {
       const baseURL = error?.config?.baseURL;
       const url = error?.config?.url;

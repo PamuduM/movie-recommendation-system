@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
-import { api } from '../services/api';
+import { api, setUnauthorizedHandler } from '../services/api';
 import {
   AuthUser,
   clearSession,
@@ -103,6 +103,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setToken(null);
   };
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => logout());
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const value = useMemo(
     () => ({
