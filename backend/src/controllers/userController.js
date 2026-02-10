@@ -1,4 +1,5 @@
 const { User } = require('../models');
+const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -216,6 +217,29 @@ exports.verifyEmail = async (req, res) => {
         emailVerified: user.emailVerified,
       },
     });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+exports.searchUsers = async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json([]);
+    const dialect = User.sequelize.getDialect();
+    const op = dialect === 'postgres' ? Op.iLike : Op.like;
+
+    const users = await User.findAll({
+      where: {
+        username: { [op]: `%${q}%` },
+        id: { [Op.ne]: req.user.id },
+      },
+      attributes: ['id', 'username', 'avatar', 'bio'],
+      limit: 20,
+      order: [['username', 'ASC']],
+    });
+
+    res.json(users);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

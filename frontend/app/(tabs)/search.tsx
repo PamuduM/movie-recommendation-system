@@ -1,5 +1,5 @@
-import ExploreScreen from '@/screens/ExploreScreen';
+import SearchScreen from '@/screens/SearchScreen';
 
 export default function SearchTab() {
-  return <ExploreScreen />;
+  return <SearchScreen />;
 }

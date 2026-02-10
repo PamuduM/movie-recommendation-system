@@ -115,6 +115,12 @@ export const searchMovies = async (q: string, genre?: string) => {
   return response.data;
 };
 
+// Example: Search users by username
+export const searchUsers = async (q: string) => {
+  const response = await api.get('/users/search', { params: { q } });
+  return response.data;
+};
+
 // Example: Fetch notifications for a user
 export const fetchNotifications = async (userId: number) => {
   const response = await api.get(`/notifications/${userId}`);

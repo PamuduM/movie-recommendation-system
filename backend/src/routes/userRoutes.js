@@ -16,6 +16,8 @@ router.post('/login', [
   body('password').notEmpty()
 ], validateRequest, userController.login);
 
+router.get('/search', auth, userController.searchUsers);
+
 router.get('/me', auth, userController.getMe);
 
 router.put('/me', auth, [
