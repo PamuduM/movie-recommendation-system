@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Chat, User } = require('../models');
+const { Chat, User, Follow } = require('../models');
 
 exports.getChatsByUser = async (req, res) => {
   try {
@@ -35,8 +35,21 @@ exports.sendMessage = async (req, res) => {
     if (!Number.isInteger(parsedReceiverId)) {
       return res.status(400).json({ error: 'Invalid receiverId' });
     }
+    if (parsedReceiverId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot chat with yourself' });
+    }
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (!Boolean(isAI)) {
+      const [followsA, followsB] = await Promise.all([
+        Follow.findOne({ where: { followerId: req.user.id, followingId: parsedReceiverId } }),
+        Follow.findOne({ where: { followerId: parsedReceiverId, followingId: req.user.id } }),
+      ]);
+      if (!followsA || !followsB) {
+        return res.status(403).json({ error: 'Follow each other to chat' });
+      }
     }
 
     const chat = await Chat.create({

@@ -42,6 +42,9 @@ app.use('/api/search', searchRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
 
+const followRoutes = require('./routes/followRoutes');
+app.use('/api/follows', followRoutes);
+
 const tmdbRoutes = require('./routes/tmdbRoutes');
 app.use('/api/tmdb', tmdbRoutes);
 

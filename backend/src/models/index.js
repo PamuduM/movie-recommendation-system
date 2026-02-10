@@ -5,6 +5,7 @@ const Watchlist = require('./Watchlist');
 const Favorite = require('./Favorite');
 const Chat = require('./Chat');
 const Notification = require('./Notification');
+const Follow = require('./Follow');
 
 // Associations
 User.hasMany(Review, { foreignKey: 'userId' });
@@ -32,4 +33,9 @@ Chat.belongsTo(User, { foreignKey: 'receiverId', as: 'receiver' });
 User.hasMany(Notification, { foreignKey: 'userId' });
 Notification.belongsTo(User, { foreignKey: 'userId' });
 
-module.exports = { User, Movie, Review, Watchlist, Favorite, Chat, Notification };
+User.hasMany(Follow, { foreignKey: 'followerId', as: 'Following' });
+User.hasMany(Follow, { foreignKey: 'followingId', as: 'Followers' });
+Follow.belongsTo(User, { foreignKey: 'followerId', as: 'follower' });
+Follow.belongsTo(User, { foreignKey: 'followingId', as: 'following' });
+
+module.exports = { User, Movie, Review, Watchlist, Favorite, Chat, Notification, Follow };

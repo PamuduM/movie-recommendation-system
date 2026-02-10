@@ -121,6 +121,27 @@ export const searchUsers = async (q: string) => {
   return response.data;
 };
 
+// Example: Follow/unfollow and lists
+export const followUser = async (userId: number) => {
+  const response = await api.post(`/follows/${userId}`);
+  return response.data;
+};
+
+export const unfollowUser = async (userId: number) => {
+  const response = await api.delete(`/follows/${userId}`);
+  return response.data;
+};
+
+export const fetchFollowers = async (userId: number) => {
+  const response = await api.get(`/follows/followers/${userId}`);
+  return response.data;
+};
+
+export const fetchFollowing = async (userId: number) => {
+  const response = await api.get(`/follows/following/${userId}`);
+  return response.data;
+};
+
 // Example: Fetch notifications for a user
 export const fetchNotifications = async (userId: number) => {
   const response = await api.get(`/notifications/${userId}`);
