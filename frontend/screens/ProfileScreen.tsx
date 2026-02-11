@@ -121,26 +121,46 @@ const ProfileScreen = () => {
     <View style={styles.container}>
       {user ? (
         <View style={styles.card}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" />
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Username</Text>
+            <TextInput
+              style={[styles.input, styles.inputRow]}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          </View>
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Email</Text>
+            <TextInput
+              style={[styles.input, styles.inputRow]}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
 
-          <Text style={styles.label}>Avatar URL</Text>
-          <TextInput style={styles.input} value={avatar} onChangeText={setAvatar} autoCapitalize="none" />
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Avatar URL</Text>
+            <TextInput
+              style={[styles.input, styles.inputRow]}
+              value={avatar}
+              onChangeText={setAvatar}
+              autoCapitalize="none"
+            />
+          </View>
 
-          <Text style={styles.label}>Bio</Text>
-          <TextInput style={styles.input} value={bio} onChangeText={setBio} />
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Bio</Text>
+            <TextInput style={[styles.input, styles.inputRow]} value={bio} onChangeText={setBio} />
+          </View>
 
-          <Text style={styles.label}>Email status</Text>
-          <Text style={styles.value}>{user.emailVerified ? 'Verified' : 'Not verified'}</Text>
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Email status</Text>
+            <Text style={[styles.value, styles.valueRow]}>{user.emailVerified ? 'Verified' : 'Not verified'}</Text>
+          </View>
 
           <Button title={saving ? 'Saving…' : 'Save changes'} onPress={onSave} disabled={saving} />
 
@@ -230,6 +250,10 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, color: '#666', marginTop: 8 },
   value: { fontSize: 16, fontWeight: '600' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginTop: 6 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  labelCol: { width: 110, fontSize: 12, color: '#666' },
+  inputRow: { flex: 1, marginTop: 0 },
+  valueRow: { flex: 1 },
   muted: { textAlign: 'center', color: '#666', marginBottom: 16 },
   error: { color: '#b00020', textAlign: 'center', marginBottom: 12 },
   message: { color: '#0a7', textAlign: 'center', marginBottom: 12 },
