@@ -123,10 +123,20 @@ export const fetchRecommendations = async (userId: number) => {
   return response.data;
 };
 
+type SearchMoviesOptions = {
+  genre?: string;
+  yearRange?: [number, number];
+};
+
 // Example: Search movies
-export const searchMovies = async (q: string, genre?: string) => {
-  const params: any = { q };
-  if (genre) params.genre = genre;
+export const searchMovies = async (q: string, options?: SearchMoviesOptions) => {
+  const params: Record<string, string | number> = { q };
+  if (options?.genre) params.genre = options.genre;
+  if (options?.yearRange) {
+    const [yearMin, yearMax] = options.yearRange;
+    params.yearMin = yearMin;
+    params.yearMax = yearMax;
+  }
   const response = await api.get('/search', { params });
   return response.data;
 };
