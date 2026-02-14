@@ -61,7 +61,18 @@ const HomeScreen = () => {
   const loadPage = async (nextPage: number, replace = false) => {
     const data: TmdbResponse = await fetchTmdbTrendingMovies('week', nextPage);
     if (Array.isArray(data?.results)) {
-      setMovies((prev) => (replace ? data.results : [...prev, ...data.results]));
+      setMovies((prev) => {
+        const nextList = replace ? data.results : [...prev, ...data.results];
+        const seen = new Set<number>();
+        // FlatList needs unique keys, so drop duplicate movie ids across pages.
+        return nextList.filter((movie) => {
+          if (seen.has(movie.id)) {
+            return false;
+          }
+          seen.add(movie.id);
+          return true;
+        });
+      });
       const totalPages = data?.total_pages ?? nextPage;
       setHasMore(nextPage < totalPages);
       setPage(nextPage);
