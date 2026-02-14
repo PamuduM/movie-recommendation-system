@@ -136,6 +136,7 @@ const HomeScreen = () => {
           data={movies}
           keyExtractor={(item) => String(item.id)}
           horizontal
+          removeClippedSubviews={false}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           onEndReached={handleLoadMore}
