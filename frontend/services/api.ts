@@ -12,7 +12,23 @@ const getDevHost = () => {
     Constants.expoGoConfig?.hostUri ??
     Constants.manifest?.debuggerHost;
   if (!hostUri) return null;
-  return hostUri.split(':')[0];
+
+  // Expo tunnel URLs (exp://) confuse simple string splits; normalize before parsing.
+  const normalized = (() => {
+    if (hostUri.startsWith('exp://')) {
+      return hostUri.replace('exp://', 'http://');
+    }
+    if (!hostUri.includes('://')) {
+      return `http://${hostUri}`;
+    }
+    return hostUri;
+  })();
+
+  try {
+    return new URL(normalized).hostname;
+  } catch (error) {
+    return hostUri.replace(/^.*:\/\//, '').split(':')[0];
+  }
 };
 
 // Android Emulator: 10.0.2.2 points to the host machine.
