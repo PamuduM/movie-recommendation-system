@@ -12,22 +12,56 @@ const clampYear = (value) => {
   return Math.min(Math.max(parsed, MIN_YEAR), MAX_YEAR);
 };
 
+const collectGenres = (...values) => {
+  const results = [];
+  const pushValue = (value) => {
+    if (value === undefined || value === null) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    String(value)
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => results.push(part));
+  };
+  values.forEach(pushValue);
+  return Array.from(new Set(results));
+};
+
+const SORT_MAP = {
+  'title-asc': [['title', 'ASC']],
+  'title-desc': [['title', 'DESC']],
+  'release-asc': [['releaseDate', 'ASC']],
+  'release-desc': [['releaseDate', 'DESC']],
+};
+
+const resolveSortOrder = (sortKey) => SORT_MAP[sortKey] ?? SORT_MAP['release-desc'];
+
 // Search movies by title or genre
 router.get('/', async (req, res) => {
   try {
-    const { q, genre, yearMin, yearMax } = req.query;
+    const { q, genre, genres, yearMin, yearMax, sort } = req.query;
     const dialect = Movie.sequelize.getDialect();
     const where = {};
     if (q) {
       const op = dialect === 'postgres' ? Op.iLike : Op.like;
       where.title = { [op]: `%${q}%` };
     }
-    if (genre) {
+    const requestedGenres = collectGenres(genre, genres);
+    if (requestedGenres.length) {
       if (dialect === 'postgres') {
-        where.genres = { [Op.contains]: [genre] };
+        where.genres = { [Op.contains]: requestedGenres };
       } else {
-        // SQLite stores JSON as TEXT; this is a simple substring match.
-        where.genres = { [Op.like]: `%${genre}%` };
+        const genreFilters = requestedGenres.map((name) => ({
+          genres: { [Op.like]: `%${name}%` },
+        }));
+        if (genreFilters.length === 1) {
+          where.genres = genreFilters[0].genres;
+        } else {
+          where[Op.and] = [...(where[Op.and] ?? []), ...genreFilters];
+        }
       }
     }
     const startYear = clampYear(yearMin);
@@ -44,7 +78,7 @@ router.get('/', async (req, res) => {
         [Op.between]: [rangeStart, rangeEnd],
       };
     }
-    const movies = await Movie.findAll({ where });
+    const movies = await Movie.findAll({ where, order: resolveSortOrder(sort) });
     res.json(movies);
   } catch (err) {
     res.status(500).json({ error: err.message });

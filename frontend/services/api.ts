@@ -125,17 +125,27 @@ export const fetchRecommendations = async (userId: number) => {
 
 type SearchMoviesOptions = {
   genre?: string;
+  genres?: string[];
   yearRange?: [number, number];
+  sort?: 'title-asc' | 'title-desc' | 'release-asc' | 'release-desc';
 };
 
 // Example: Search movies
 export const searchMovies = async (q: string, options?: SearchMoviesOptions) => {
   const params: Record<string, string | number> = { q };
-  if (options?.genre) params.genre = options.genre;
+  const normalizedGenres = options?.genres?.map((name) => name.trim()).filter(Boolean) ?? [];
+  if (normalizedGenres.length) {
+    params.genres = normalizedGenres.join(',');
+  } else if (options?.genre) {
+    params.genre = options.genre;
+  }
   if (options?.yearRange) {
     const [yearMin, yearMax] = options.yearRange;
     params.yearMin = yearMin;
     params.yearMax = yearMax;
+  }
+  if (options?.sort) {
+    params.sort = options.sort;
   }
   const response = await api.get('/search', { params });
   return response.data;
