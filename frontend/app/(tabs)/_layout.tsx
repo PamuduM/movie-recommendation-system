@@ -37,7 +37,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          href: null,
+          title: 'Search',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="magnifyingglass.circle" color={color} />
+          ),
         }}
       />
 
