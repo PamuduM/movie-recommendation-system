@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-02-19T03:36:50.813Z",
+  "tables": {
+    "Chats": [],
+    "Favorites": [],
+    "Follows": [],
+    "Movies": [],
+    "Notifications": [],
+    "Reviews": [],
+    "Users": [
+      {
+        "id": 1,
+        "username": "oreki",
+        "email": "oreki2002@gmail.com",
+        "password": "$2a$10$j7lwuCs6TohMgBQzJPrhduDr6KDlvQOIePuD092a5O4drprYHWZ..",
+        "avatar": null,
+        "bio": null,
+        "createdAt": "2026-02-02 02:33:57.474 +00:00",
+        "updatedAt": "2026-02-02 02:33:57.474 +00:00",
+        "emailVerified": 0,
+        "emailVerificationToken": "fc4cab5a5e3d6d9bae5668f564aae7a51e65c01cec658cb8ba93645b0c385e3e",
+        "emailVerificationExpires": "2026-02-03 02:33:57.472 +00:00",
+        "passwordResetToken": null,
+        "passwordResetExpires": null
+      }
+    ],
+    "Watchlists": []
+  }
+}
