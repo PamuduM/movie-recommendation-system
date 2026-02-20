@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sqlite3
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -20,6 +21,7 @@ class Movie:
     title: str
     description: str
     genres: List[str]
+    release_year: Optional[int] = None
 
 
 @dataclass
@@ -58,12 +60,32 @@ def _parse_genres(value: object) -> List[str]:
     return [str(value)]
 
 
+def _extract_year(value: object) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        year = int(value)
+        if 1800 <= year <= 3000:
+            return year
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    match = re.search(r"(\d{4})", text)
+    if not match:
+        return None
+    year = int(match.group(1))
+    if 1800 <= year <= 3000:
+        return year
+    return None
+
+
 def _load_movies(conn: sqlite3.Connection) -> Dict[int, Movie]:
     table = _find_table(conn, ["Movie", "Movies"])
     if not table:
         raise RuntimeError("Movies table not found in database.")
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(f"SELECT id, title, description, genres FROM {table}").fetchall()
+    rows = conn.execute(f"SELECT id, title, description, genres, releaseDate FROM {table}").fetchall()
     movies: Dict[int, Movie] = {}
     for row in rows:
         movie_id = int(row["id"])
@@ -72,6 +94,39 @@ def _load_movies(conn: sqlite3.Connection) -> Dict[int, Movie]:
             title=row["title"] or "",
             description=row["description"] or "",
             genres=_parse_genres(row["genres"]),
+            release_year=_extract_year(row["releaseDate"]),
+        )
+    return movies
+
+
+def _load_movies_from_json(input_path: str) -> Dict[int, Movie]:
+    with open(input_path, "r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    records = payload.get("movies", payload) if isinstance(payload, dict) else payload
+    if not isinstance(records, list):
+        raise RuntimeError("Invalid input JSON: expected list or { movies: [...] }.")
+
+    movies: Dict[int, Movie] = {}
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        movie_id = row.get("id")
+        if movie_id is None:
+            continue
+        try:
+            normalized_id = int(movie_id)
+        except (TypeError, ValueError):
+            continue
+
+        movies[normalized_id] = Movie(
+            id=normalized_id,
+            title=str(row.get("title") or row.get("original_title") or ""),
+            description=str(row.get("description") or row.get("overview") or ""),
+            genres=_parse_genres(row.get("genres")),
+            release_year=_extract_year(
+                row.get("releaseYear") or row.get("release_year") or row.get("releaseDate") or row.get("release_date")
+            ),
         )
     return movies
 
@@ -204,6 +259,87 @@ def _popularity_fallback(
     return _min_max_scale(counts)
 
 
+def search_movies_by_keyword(
+    query: str,
+    movies: Dict[int, Movie],
+    top_n: int = 20,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
+    genres: Optional[List[str]] = None,
+    sort: str = "score-desc",
+) -> List[Dict[str, object]]:
+    normalized_query = str(query).strip()
+    if not normalized_query:
+        return []
+    if not movies:
+        return []
+
+    movie_ids = list(movies.keys())
+    texts = []
+    for mid in movie_ids:
+        movie = movies[mid]
+        genre_text = " ".join(movie.genres)
+        texts.append(f"{movie.title} {movie.description} {genre_text}")
+
+    vectorizer = TfidfVectorizer(stop_words="english", max_features=5000, ngram_range=(1, 2))
+    matrix = vectorizer.fit_transform(texts + [normalized_query])
+    query_vector = matrix[-1]
+    movie_matrix = matrix[:-1]
+    scores = cosine_similarity(movie_matrix, query_vector).reshape(-1)
+
+    min_year = None
+    max_year = None
+    if year_min is not None or year_max is not None:
+        resolved_start = year_min if year_min is not None else year_max
+        resolved_end = year_max if year_max is not None else year_min
+        if resolved_start is not None and resolved_end is not None:
+            min_year = min(resolved_start, resolved_end)
+            max_year = max(resolved_start, resolved_end)
+
+    genre_filters = {g.strip().lower() for g in (genres or []) if g and g.strip()}
+
+    ranked: List[Dict[str, object]] = []
+    for movie_id, score in zip(movie_ids, scores):
+        movie = movies[movie_id]
+        if min_year is not None and max_year is not None:
+            if movie.release_year is None or movie.release_year < min_year or movie.release_year > max_year:
+                continue
+
+        if genre_filters:
+            movie_genres = {g.strip().lower() for g in movie.genres if str(g).strip()}
+            if not movie_genres.intersection(genre_filters):
+                continue
+
+        ranked.append(
+            {
+                "movie_id": movie_id,
+                "title": movie.title,
+                "score": float(score),
+                "release_year": movie.release_year,
+                "genres": movie.genres,
+            }
+        )
+
+    sort_key = (sort or "score-desc").strip().lower()
+    if sort_key == "title-asc":
+        ranked.sort(key=lambda item: str(item.get("title") or "").lower())
+    elif sort_key == "title-desc":
+        ranked.sort(key=lambda item: str(item.get("title") or "").lower(), reverse=True)
+    elif sort_key == "release-asc":
+        ranked.sort(key=lambda item: int(item.get("release_year") or 0))
+    elif sort_key == "release-desc":
+        ranked.sort(key=lambda item: int(item.get("release_year") or 0), reverse=True)
+    elif sort_key == "score-asc":
+        ranked.sort(key=lambda item: float(item.get("score") or 0.0))
+    else:
+        ranked.sort(key=lambda item: float(item.get("score") or 0.0), reverse=True)
+
+    if sort_key.startswith("score"):
+        ranked = [item for item in ranked if float(item.get("score") or 0.0) > 0]
+
+    return ranked[:top_n]
+
+
 def recommend_for_user(
     user_id: int,
     db_path: str,
@@ -251,14 +387,58 @@ def recommend_for_user(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="FlickX hybrid movie recommender")
-    parser.add_argument("--db", required=True, help="Path to SQLite database")
-    parser.add_argument("--user-id", required=True, type=int, help="User ID")
+    parser.add_argument("--mode", choices=["recommend", "keyword"], default="recommend")
+    parser.add_argument("--db", help="Path to SQLite database")
+    parser.add_argument("--input-json", help="Path to input JSON payload with movies")
+    parser.add_argument("--user-id", type=int, help="User ID")
+    parser.add_argument("--query", help="Keyword query for AI movie search")
     parser.add_argument("--top-n", type=int, default=10, help="Number of recommendations")
     parser.add_argument("--alpha", type=float, default=0.6, help="Collaborative weight")
+    parser.add_argument("--year-min", type=int, help="Minimum release year for keyword search")
+    parser.add_argument("--year-max", type=int, help="Maximum release year for keyword search")
+    parser.add_argument("--genres", help="Comma-separated genres for keyword search")
+    parser.add_argument(
+        "--sort",
+        default="score-desc",
+        help="Sort option: score-desc, score-asc, title-asc, title-desc, release-asc, release-desc",
+    )
     args = parser.parse_args()
 
-    recs = recommend_for_user(args.user_id, args.db, args.top_n, args.alpha)
-    print(json.dumps(recs, indent=2))
+    if args.mode == "recommend":
+        if args.user_id is None or not args.db:
+            raise SystemExit("recommend mode requires --db and --user-id")
+        recs = recommend_for_user(args.user_id, args.db, args.top_n, args.alpha)
+        print(json.dumps(recs, indent=2))
+        return 0
+
+    if args.mode == "keyword":
+        if not args.query:
+            raise SystemExit("keyword mode requires --query")
+
+        if args.input_json:
+            movies = _load_movies_from_json(args.input_json)
+        elif args.db:
+            conn = sqlite3.connect(args.db)
+            try:
+                movies = _load_movies(conn)
+            finally:
+                conn.close()
+        else:
+            raise SystemExit("keyword mode requires --input-json or --db")
+
+        genre_filters = _parse_genres(args.genres)
+        results = search_movies_by_keyword(
+            query=args.query,
+            movies=movies,
+            top_n=args.top_n,
+            year_min=args.year_min,
+            year_max=args.year_max,
+            genres=genre_filters,
+            sort=args.sort,
+        )
+        print(json.dumps(results, indent=2))
+        return 0
+
     return 0
 
 
