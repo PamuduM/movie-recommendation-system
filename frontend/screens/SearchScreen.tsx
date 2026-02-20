@@ -33,7 +33,9 @@ const FALLBACK_GENRES = [
   'Thriller',
 ];
 
-const SORT_OPTIONS = [
+type SortValue = 'release-desc' | 'release-asc' | 'title-asc' | 'title-desc';
+
+const SORT_OPTIONS: Array<{ label: string; value: SortValue }> = [
   { label: 'Newest first', value: 'release-desc' },
   { label: 'Oldest first', value: 'release-asc' },
   { label: 'Title (A–Z)', value: 'title-asc' },
@@ -46,9 +48,7 @@ const SearchScreen = () => {
   const [yearRange, setYearRange] = useState<[number, number]>([2000, CURRENT_YEAR]);
   const [genreOptions, setGenreOptions] = useState<string[]>(FALLBACK_GENRES);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [sortValue, setSortValue] = useState<'release-desc' | 'release-asc' | 'title-asc' | 'title-desc'>(
-    'release-desc'
-  );
+  const [sortValue, setSortValue] = useState<SortValue>('release-desc');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isAiSearching, setIsAiSearching] = useState(false);
@@ -155,7 +155,7 @@ const SearchScreen = () => {
 
   const activeSortLabel = SORT_OPTIONS.find((option) => option.value === sortValue)?.label;
 
-  const handleSortSelect = (value: (typeof SORT_OPTIONS)[number]['value']) => {
+  const handleSortSelect = (value: SortValue) => {
     setSortValue(value);
     setSortMenuOpen(false);
   };
@@ -172,158 +172,164 @@ const SearchScreen = () => {
     );
   };
 
+  const hasAnyQuery = hasQuery || hasAiQuery;
+
   const listEmptyComponent = searchMode === 'ai' ? (
     <Text style={styles.emptyText}>No movies matched the AI people search query.</Text>
   ) : hasQuery ? (
     <Text style={styles.emptyText}>No movies match the current filters.</Text>
   ) : (
-    <Text style={styles.emptyText}>Enter a movie title to start searching.</Text>
+    <Text style={styles.emptyText}>Use one of the search inputs above to start searching.</Text>
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Find movies</Text>
-      <TextInput
-        style={styles.input}
-        value={movieQuery}
-        onChangeText={setMovieQuery}
-        placeholder="Enter movie title or genre"
-        autoCorrect={false}
-        autoCapitalize="none"
-      />
-
-      <View style={styles.sliderSection}>
-        <View style={styles.rangeHeader}>
-          <Text style={styles.sectionSubtitle}>Release year range</Text>
-          <Text style={styles.rangeValue}>
-            {yearRange[0]} – {yearRange[1]}
-          </Text>
-        </View>
-        <MultiSlider
-          min={EARLIEST_YEAR}
-          max={CURRENT_YEAR}
-          step={1}
-          values={yearRange}
-          allowOverlap={false}
-          snapped
-          sliderLength={sliderLength}
-          onValuesChange={handleYearRangeChange}
-          containerStyle={styles.sliderContainer}
-          trackStyle={styles.sliderTrack}
-          selectedStyle={styles.sliderSelected}
-          unselectedStyle={styles.sliderUnselected}
-          markerStyle={styles.sliderMarker}
-          pressedMarkerStyle={styles.sliderMarkerPressed}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.yearLabel}>{EARLIEST_YEAR}</Text>
-          <Text style={styles.yearLabel}>{CURRENT_YEAR}</Text>
-        </View>
-      </View>
-
-      <View style={styles.genreSection}>
-        <View style={styles.genreHeader}>
-          <Text style={styles.sectionSubtitle}>Genres</Text>
-          <Text style={styles.genreHint}>{selectedGenreHint}</Text>
-        </View>
-        <View style={styles.checkboxGrid}>
-          {genreOptions.map((name) => {
-            const checked = selectedGenres.includes(name);
-            return (
-              <Pressable
-                key={name}
-                style={[styles.checkboxChip, checked && styles.checkboxChipChecked]}
-                onPress={() => toggleGenre(name)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked }}
-              >
-                <View style={[styles.checkboxBox, checked && styles.checkboxBoxChecked]}>
-                  {checked ? <View style={styles.checkboxIndicator} /> : null}
-                </View>
-                <Text
-                  style={[styles.checkboxLabel, checked && styles.checkboxLabelChecked]}
-                  numberOfLines={1}
-                >
-                  {name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.sortSection}>
-        <Text style={styles.sectionSubtitle}>Sort by</Text>
-        <Pressable
-          onPress={() => setSortMenuOpen((prev) => !prev)}
-          style={styles.sortSelector}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: sortMenuOpen }}
-        >
-          <Text style={styles.sortValueText}>{activeSortLabel}</Text>
-          <MaterialIcons
-            name={sortMenuOpen ? 'expand-less' : 'expand-more'}
-            size={20}
-            color="#4b5563"
+    <FlatList
+      style={styles.container}
+      data={movieResults}
+      renderItem={renderMovieItem}
+      keyExtractor={(item, index) => String(item?.id ?? `result-${index}`)}
+      ListHeaderComponent={
+        <View>
+          <Text style={styles.sectionTitle}>Find movies</Text>
+          <TextInput
+            style={styles.input}
+            value={movieQuery}
+            onChangeText={setMovieQuery}
+            placeholder="Enter movie title or genre"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-        </Pressable>
-        {sortMenuOpen ? (
-          <View style={styles.sortDropdown}>
-            {SORT_OPTIONS.map((option) => {
-              const selected = option.value === sortValue;
-              return (
-                <Pressable
-                  key={option.value}
-                  style={[styles.sortOption, selected && styles.sortOptionSelected]}
-                  onPress={() => handleSortSelect(option.value)}
-                  accessibilityRole="menuitemradio"
-                  accessibilityState={{ checked: selected }}
-                >
-                  <Text style={[styles.sortOptionLabel, selected && styles.sortOptionLabelSelected]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+
+          <View style={styles.sliderSection}>
+            <View style={styles.rangeHeader}>
+              <Text style={styles.sectionSubtitle}>Release year range</Text>
+              <Text style={styles.rangeValue}>
+                {yearRange[0]} – {yearRange[1]}
+              </Text>
+            </View>
+            <MultiSlider
+              min={EARLIEST_YEAR}
+              max={CURRENT_YEAR}
+              step={1}
+              values={yearRange}
+              allowOverlap={false}
+              snapped
+              sliderLength={sliderLength}
+              onValuesChange={handleYearRangeChange}
+              containerStyle={styles.sliderContainer}
+              trackStyle={styles.sliderTrack}
+              selectedStyle={styles.sliderSelected}
+              unselectedStyle={styles.sliderUnselected}
+              markerStyle={styles.sliderMarker}
+              pressedMarkerStyle={styles.sliderMarkerPressed}
+            />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.yearLabel}>{EARLIEST_YEAR}</Text>
+              <Text style={styles.yearLabel}>{CURRENT_YEAR}</Text>
+            </View>
           </View>
-        ) : null}
-      </View>
 
-      <Button
-        title={isSearching ? 'Searching…' : 'Search movies'}
-        onPress={handleMovieSearch}
-        disabled={!hasQuery || isSearching}
-      />
+          <View style={styles.genreSection}>
+            <View style={styles.genreHeader}>
+              <Text style={styles.sectionSubtitle}>Genres</Text>
+              <Text style={styles.genreHint}>{selectedGenreHint}</Text>
+            </View>
+            <View style={styles.checkboxGrid}>
+              {genreOptions.map((name) => {
+                const checked = selectedGenres.includes(name);
+                return (
+                  <Pressable
+                    key={name}
+                    style={[styles.checkboxChip, checked && styles.checkboxChipChecked]}
+                    onPress={() => toggleGenre(name)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                  >
+                    <View style={[styles.checkboxBox, checked && styles.checkboxBoxChecked]}>
+                      {checked ? <View style={styles.checkboxIndicator} /> : null}
+                    </View>
+                    <Text
+                      style={[styles.checkboxLabel, checked && styles.checkboxLabelChecked]}
+                      numberOfLines={1}
+                    >
+                      {name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
-      <View style={styles.aiSection}>
-        <Text style={styles.sectionSubtitle}>AI people keyword search</Text>
-        <TextInput
-          style={styles.input}
-          value={aiKeywordQuery}
-          onChangeText={setAiKeywordQuery}
-          placeholder="Try: director Nolan, cast DiCaprio"
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        <Button
-          title={isAiSearching ? 'Searching AI…' : 'Search by director/cast/actor/actress'}
-          onPress={handleAiKeywordSearch}
-          disabled={!hasAiQuery || isAiSearching}
-        />
-      </View>
+          <View style={styles.sortSection}>
+            <Text style={styles.sectionSubtitle}>Sort by</Text>
+            <Pressable
+              onPress={() => setSortMenuOpen((prev) => !prev)}
+              style={styles.sortSelector}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: sortMenuOpen }}
+            >
+              <Text style={styles.sortValueText}>{activeSortLabel}</Text>
+              <MaterialIcons
+                name={sortMenuOpen ? 'expand-less' : 'expand-more'}
+                size={20}
+                color="#4b5563"
+              />
+            </Pressable>
+            {sortMenuOpen ? (
+              <View style={styles.sortDropdown}>
+                {SORT_OPTIONS.map((option) => {
+                  const selected = option.value === sortValue;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={[styles.sortOption, selected && styles.sortOptionSelected]}
+                      onPress={() => handleSortSelect(option.value)}
+                      accessibilityRole="button"
+                      accessibilityState={{ checked: selected }}
+                    >
+                      <Text style={[styles.sortOptionLabel, selected && styles.sortOptionLabelSelected]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {aiError ? <Text style={styles.errorText}>{aiError}</Text> : null}
+          <Button
+            title={isSearching ? 'Searching…' : 'Search movies'}
+            onPress={handleMovieSearch}
+            disabled={!hasQuery || isSearching}
+          />
 
-      <FlatList
-        data={movieResults}
-        renderItem={renderMovieItem}
-        keyExtractor={(item) => String(item.id)}
-        ListEmptyComponent={listEmptyComponent}
-        contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-      />
-    </View>
+          <View style={styles.aiSection}>
+            <Text style={styles.sectionSubtitle}>AI people keyword search</Text>
+            <TextInput
+              style={styles.input}
+              value={aiKeywordQuery}
+              onChangeText={setAiKeywordQuery}
+              placeholder="Try: director Nolan, cast DiCaprio"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            <Button
+              title={isAiSearching ? 'Searching AI…' : 'Search by director/cast/actor/actress'}
+              onPress={handleAiKeywordSearch}
+              disabled={!hasAiQuery || isAiSearching}
+            />
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {aiError ? <Text style={styles.errorText}>{aiError}</Text> : null}
+
+          {hasAnyQuery ? <Text style={styles.resultHeading}>Results</Text> : null}
+        </View>
+      }
+      ListEmptyComponent={listEmptyComponent}
+      contentContainerStyle={styles.listContent}
+      keyboardShouldPersistTaps="handled"
+    />
   );
 };
 
@@ -494,7 +500,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   listContent: {
+    paddingHorizontal: 16,
     paddingVertical: 16,
+    flexGrow: 1,
+  },
+  resultHeading: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 16,
+    color: '#111827',
   },
   resultRow: {
     paddingVertical: 12,
