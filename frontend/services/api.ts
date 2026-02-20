@@ -135,6 +135,47 @@ type SearchMoviesOptions = {
   sort?: 'title-asc' | 'title-desc' | 'release-asc' | 'release-desc';
 };
 
+const resolveMovieTitle = (movie: any) =>
+  String(movie?.title ?? movie?.original_title ?? '').toLowerCase();
+
+const resolveMovieReleaseTimestamp = (movie: any) => {
+  const value = movie?.releaseDate ?? movie?.release_date;
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const sortMovieResults = (
+  movies: any[],
+  sort?: 'title-asc' | 'title-desc' | 'release-asc' | 'release-desc'
+) => {
+  const copy = [...movies];
+  switch (sort) {
+    case 'title-asc':
+      return copy.sort((a, b) => resolveMovieTitle(a).localeCompare(resolveMovieTitle(b)));
+    case 'title-desc':
+      return copy.sort((a, b) => resolveMovieTitle(b).localeCompare(resolveMovieTitle(a)));
+    case 'release-asc':
+      return copy.sort((a, b) => resolveMovieReleaseTimestamp(a) - resolveMovieReleaseTimestamp(b));
+    case 'release-desc':
+    default:
+      return copy.sort((a, b) => resolveMovieReleaseTimestamp(b) - resolveMovieReleaseTimestamp(a));
+  }
+};
+
+const filterByYearRange = (movies: any[], yearRange?: [number, number]) => {
+  if (!yearRange) return movies;
+  const [startYear, endYear] = yearRange;
+  const minYear = Math.min(startYear, endYear);
+  const maxYear = Math.max(startYear, endYear);
+  return movies.filter((movie) => {
+    const value = movie?.releaseDate ?? movie?.release_date;
+    if (!value) return false;
+    const year = new Date(value).getFullYear();
+    return Number.isFinite(year) && year >= minYear && year <= maxYear;
+  });
+};
+
 // Example: Search movies
 export const searchMovies = async (q: string, options?: SearchMoviesOptions) => {
   const params: Record<string, string | number> = { q };
@@ -153,7 +194,20 @@ export const searchMovies = async (q: string, options?: SearchMoviesOptions) => 
     params.sort = options.sort;
   }
   const response = await api.get('/search', { params });
-  return response.data;
+  const localResults = Array.isArray(response.data)
+    ? response.data
+    : Array.isArray(response.data?.results)
+      ? response.data.results
+      : [];
+
+  if (localResults.length > 0) {
+    return localResults;
+  }
+
+  const tmdbResponse = await searchTmdbMovies(q);
+  const tmdbResults = Array.isArray(tmdbResponse?.results) ? tmdbResponse.results : [];
+  const filtered = filterByYearRange(tmdbResults, options?.yearRange);
+  return sortMovieResults(filtered, options?.sort);
 };
 
 // Example: Search users by username
