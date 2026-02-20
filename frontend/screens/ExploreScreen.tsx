@@ -164,9 +164,14 @@ const ExploreScreen = () => {
     const releaseDateValue = item.releaseDate ?? item.release_date;
     const releaseYear = releaseDateValue ? new Date(releaseDateValue).getFullYear() : '—';
     const movieTitle = item.title ?? item.original_title ?? 'Untitled';
+    const aiScore = Number(item?.aiScore);
+    const hasAiScore = Number.isFinite(aiScore) && aiScore > 0;
     return (
       <View style={styles.resultRow}>
-        <Text style={styles.resultTitle}>{movieTitle}</Text>
+        <View style={styles.resultTextWrap}>
+          <Text style={styles.resultTitle}>{movieTitle}</Text>
+          {hasAiScore ? <Text style={styles.resultScore}>AI score: {aiScore.toFixed(2)}</Text> : null}
+        </View>
         <Text style={styles.resultMeta}>{releaseYear}</Text>
       </View>
     );
@@ -516,9 +521,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
+  resultTextWrap: { flex: 1, paddingRight: 8 },
   resultTitle: { fontSize: 16, fontWeight: '500', color: '#111827', flexShrink: 1 },
+  resultScore: { fontSize: 12, color: '#4f46e5', marginTop: 2 },
   resultMeta: { fontSize: 14, color: '#6b7280', marginLeft: 12 },
   emptyText: { marginTop: 16, color: '#6b7280', textAlign: 'center' },
 });
