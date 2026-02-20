@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
-import { fetchTmdbGenres, searchMovies } from '../services/api';
+import { fetchTmdbGenres, searchMovies, searchMoviesByPeopleKeywords } from '../services/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -51,11 +51,16 @@ const SearchScreen = () => {
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isAiSearching, setIsAiSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiKeywordQuery, setAiKeywordQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('standard');
   const { width } = useWindowDimensions();
   const sliderLength = Math.max(width - 48, 240);
 
   const hasQuery = movieQuery.trim().length > 0;
+  const hasAiQuery = aiKeywordQuery.trim().length > 0;
 
   useEffect(() => {
     let active = true;
@@ -91,6 +96,7 @@ const SearchScreen = () => {
 
     setIsSearching(true);
     setError(null);
+    setAiError(null);
     try {
       const data = await searchMovies(trimmedQuery, {
         yearRange,
@@ -98,10 +104,32 @@ const SearchScreen = () => {
         sort: sortValue,
       });
       setMovieResults(data);
+      setSearchMode('standard');
     } catch (err) {
       setError('Unable to complete the search. Please try again.');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleAiKeywordSearch = async () => {
+    const trimmedQuery = aiKeywordQuery.trim();
+    if (!trimmedQuery) {
+      setMovieResults([]);
+      return;
+    }
+
+    setIsAiSearching(true);
+    setAiError(null);
+    setError(null);
+    try {
+      const data = await searchMoviesByPeopleKeywords(trimmedQuery);
+      setMovieResults(Array.isArray(data?.results) ? data.results : []);
+      setSearchMode('ai');
+    } catch (err) {
+      setAiError('Unable to complete AI people search. Please try again.');
+    } finally {
+      setIsAiSearching(false);
     }
   };
 
@@ -133,16 +161,20 @@ const SearchScreen = () => {
   };
 
   const renderMovieItem = ({ item }: { item: any }) => {
-    const releaseYear = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '—';
+    const releaseDateValue = item.releaseDate ?? item.release_date;
+    const releaseYear = releaseDateValue ? new Date(releaseDateValue).getFullYear() : '—';
+    const movieTitle = item.title ?? item.original_title ?? 'Untitled';
     return (
       <View style={styles.resultRow}>
-        <Text style={styles.resultTitle}>{item.title}</Text>
+        <Text style={styles.resultTitle}>{movieTitle}</Text>
         <Text style={styles.resultMeta}>{releaseYear}</Text>
       </View>
     );
   };
 
-  const listEmptyComponent = hasQuery ? (
+  const listEmptyComponent = searchMode === 'ai' ? (
+    <Text style={styles.emptyText}>No movies matched the AI people search query.</Text>
+  ) : hasQuery ? (
     <Text style={styles.emptyText}>No movies match the current filters.</Text>
   ) : (
     <Text style={styles.emptyText}>Enter a movie title to start searching.</Text>
@@ -263,12 +295,30 @@ const SearchScreen = () => {
         disabled={!hasQuery || isSearching}
       />
 
+      <View style={styles.aiSection}>
+        <Text style={styles.sectionSubtitle}>AI people keyword search</Text>
+        <TextInput
+          style={styles.input}
+          value={aiKeywordQuery}
+          onChangeText={setAiKeywordQuery}
+          placeholder="Try: director Nolan, cast DiCaprio"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        <Button
+          title={isAiSearching ? 'Searching AI…' : 'Search by director/cast/actor/actress'}
+          onPress={handleAiKeywordSearch}
+          disabled={!hasAiQuery || isAiSearching}
+        />
+      </View>
+
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {aiError ? <Text style={styles.errorText}>{aiError}</Text> : null}
 
       <FlatList
         data={movieResults}
         renderItem={renderMovieItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => String(item.id)}
         ListEmptyComponent={listEmptyComponent}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
@@ -388,6 +438,14 @@ const styles = StyleSheet.create({
   },
   sortOptionLabel: { fontSize: 14, color: '#111827' },
   sortOptionLabelSelected: { fontWeight: '600', color: '#4338ca' },
+  aiSection: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
   checkboxGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

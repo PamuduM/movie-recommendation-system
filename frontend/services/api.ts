@@ -117,6 +117,11 @@ export const searchTmdbMovies = async (query: string, page = 1) => {
   return response.data;
 };
 
+export const searchMoviesByPeopleKeywords = async (query: string, page = 1) => {
+  const response = await api.get('/tmdb/ai-search', { params: { query, page } });
+  return response.data;
+};
+
 // Example: Fetch recommendations for a user
 export const fetchRecommendations = async (userId: number) => {
   const response = await api.get(`/recommendations/user/${userId}`);
