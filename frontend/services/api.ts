@@ -91,10 +91,32 @@ export const fetchTmdbTrendingMovies = async (
   timeWindow: 'day' | 'week' = 'week',
   page = 1
 ) => {
-  const response = await api.get('/tmdb/trending', {
-    params: { time_window: timeWindow, page },
-  });
-  return response.data;
+  try {
+    const response = await api.get('/tmdb/trending', {
+      params: { time_window: timeWindow, page },
+    });
+    return response.data;
+  } catch (error) {
+    if (__DEV__) {
+      console.log('TMDB trending fetch failed, falling back to local movies.', {
+        message: (error as { message?: string })?.message,
+      });
+    }
+
+    const fallbackResponse = await api.get('/movies');
+    const fallbackMovies = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
+    return {
+      page: 1,
+      total_pages: 1,
+      total_results: fallbackMovies.length,
+      results: fallbackMovies.map((movie: any) => ({
+        id: movie.id,
+        title: movie.title,
+        poster_path: movie.poster ?? null,
+        release_date: movie.releaseDate ?? null,
+      })),
+    };
+  }
 };
 
 export const fetchTmdbGenres = async () => {
