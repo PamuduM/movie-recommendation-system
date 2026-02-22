@@ -7,7 +7,6 @@ import {
   FlatList,
   StyleSheet,
   Pressable,
-  useWindowDimensions,
 } from 'react-native';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import { fetchTmdbGenres, searchMovies, searchMoviesByPeopleKeywords } from '../services/api';
@@ -56,8 +55,8 @@ const ExploreScreen = () => {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiKeywordQuery, setAiKeywordQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('standard');
-  const { width } = useWindowDimensions();
-  const sliderLength = Math.max(width - 48, 240);
+  const [sliderSectionWidth, setSliderSectionWidth] = useState(0);
+  const sliderLength = Math.max(sliderSectionWidth - 32, 180);
 
   const hasQuery = movieQuery.trim().length > 0;
   const hasAiQuery = aiKeywordQuery.trim().length > 0;
@@ -205,7 +204,10 @@ const ExploreScreen = () => {
             autoCapitalize="none"
           />
 
-          <View style={styles.sliderSection}>
+          <View
+            style={styles.sliderSection}
+            onLayout={(event) => setSliderSectionWidth(event.nativeEvent.layout.width)}
+          >
             <View style={styles.rangeHeader}>
               <Text style={styles.sectionSubtitle}>Release year range</Text>
               <Text style={styles.rangeValue}>
