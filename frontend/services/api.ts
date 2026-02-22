@@ -193,21 +193,39 @@ export const searchMovies = async (q: string, options?: SearchMoviesOptions) => 
   if (options?.sort) {
     params.sort = options.sort;
   }
-  const response = await api.get('/search', { params });
-  const localResults = Array.isArray(response.data)
-    ? response.data
-    : Array.isArray(response.data?.results)
-      ? response.data.results
-      : [];
+  let localResults: any[] = [];
+  try {
+    const response = await api.get('/search', { params });
+    localResults = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.results)
+        ? response.data.results
+        : [];
+  } catch (error) {
+    if (__DEV__) {
+      console.log('Local movie search failed, trying TMDB fallback only.', {
+        message: (error as { message?: string })?.message,
+      });
+    }
+  }
 
   if (localResults.length > 0) {
     return localResults;
   }
 
-  const tmdbResponse = await searchTmdbMovies(q);
-  const tmdbResults = Array.isArray(tmdbResponse?.results) ? tmdbResponse.results : [];
-  const filtered = filterByYearRange(tmdbResults, options?.yearRange);
-  return sortMovieResults(filtered, options?.sort);
+  try {
+    const tmdbResponse = await searchTmdbMovies(q);
+    const tmdbResults = Array.isArray(tmdbResponse?.results) ? tmdbResponse.results : [];
+    const filtered = filterByYearRange(tmdbResults, options?.yearRange);
+    return sortMovieResults(filtered, options?.sort);
+  } catch (error) {
+    if (__DEV__) {
+      console.log('TMDB fallback search failed. Returning local results only.', {
+        message: (error as { message?: string })?.message,
+      });
+    }
+    return sortMovieResults(filterByYearRange(localResults, options?.yearRange), options?.sort);
+  }
 };
 
 // Example: Search users by username
