@@ -30,6 +30,10 @@ const FALLBACK_GENRES = [
   'Romance',
   'Science Fiction',
   'Thriller',
+  'War',
+  'Music',
+  'Sports',
+  'Biography',
 ];
 
 type SortValue = 'release-desc' | 'release-asc' | 'title-asc' | 'title-desc';
