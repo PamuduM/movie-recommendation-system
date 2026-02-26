@@ -160,29 +160,31 @@ const ProfileScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {user ? (
-        <View style={styles.card}>
-          <View style={styles.avatarRow}>
-            {avatar ? (
-              <Image source={{ uri: avatar }} style={styles.avatarLarge} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>{(user.username || 'U').slice(0,2).toUpperCase()}</Text>
-              </View>
-            )}
-            <View style={{ marginLeft: 12 }}>
-              <Button title="Choose avatar" onPress={pickAvatar} />
-              <View style={{ height: 8 }} />
-              <Button title="Remove avatar" onPress={removeAvatar} color="#b00020" />
+          <>
+            <View style={styles.avatarContainer}>
+              <TouchableOpacity onPress={handleAvatarPress}>
+                <Image
+                  source={avatar ? { uri: avatar } : require("../assets/images/avatar.png")}
+                  style={styles.avatar}
+                />
+                <View style={styles.cameraIconContainer}>
+                  <MaterialIcons name="photo-camera" size={24} color="#fff" />
+                </View>
+              </TouchableOpacity>
             </View>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.labelCol}>Username</Text>
-            <TextInput
-              style={[styles.input, styles.inputRow]}
-              value={username}
-              onChangeText={setUsername}
+            <Text style={styles.username}>{user?.username}</Text>
+            <Text style={styles.email}>{user?.email}</Text>
+            <View style={styles.statsContainer}>
+              <TouchableOpacity onPress={handleFollowersPress}>
+                <Text style={styles.statsNumber}>{user?.followers?.length || 0}</Text>
+                <Text style={styles.statsLabel}>Followers</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleFollowingPress}>
+                <Text style={styles.statsNumber}>{user?.following?.length || 0}</Text>
+                <Text style={styles.statsLabel}>Following</Text>
+              </TouchableOpacity>
+            </View>
+          </>
               autoCapitalize="none"
             />
           </View>
