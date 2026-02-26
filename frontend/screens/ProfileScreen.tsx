@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFollowers, fetchFollowing, followUser, searchUsers, unfollowUser } from '../services/api';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type FollowUser = {
   id: number;
@@ -238,18 +239,21 @@ const ProfileScreen = () => {
               data={userResultsWithFollowState}
               renderItem={({ item }) => (
                 <View style={styles.userRow}>
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.username}</Text>
-                    {item.bio ? <Text style={styles.userBio}>{item.bio}</Text> : null}
+                  <View style={styles.avatarContainer}>
+                    {avatar ? (
+                      <Image source={{ uri: avatar }} style={styles.avatarLarge} />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarInitials}>{(user.username || 'U').slice(0,2).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity style={styles.cameraIcon} onPress={pickAvatar}>
+                      <MaterialIcons name="photo-camera" size={28} color="#444" />
+                    </TouchableOpacity>
                   </View>
-                  <Button
-                    title={item.isFollowing ? 'Following' : 'Follow'}
-                    onPress={() => toggleFollow(item)}
-                    disabled={followBusyId === item.id}
-                  />
-                </View>
-              )}
-              keyExtractor={(item) => item.id.toString()}
+                  <View style={{ marginLeft: 12 }}>
+                    <Button title="Remove avatar" onPress={removeAvatar} color="#b00020" />
+                  </View>
               ListEmptyComponent={
                 userQuery.trim().length >= 2 ? <Text style={styles.emptyText}>No users found.</Text> : null
               }
@@ -323,9 +327,11 @@ const styles = StyleSheet.create({
   userBio: { marginTop: 4, color: '#666' },
   emptyText: { marginTop: 8, color: '#666' },
   avatarRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatarContainer: { position: 'relative', width: 80, height: 80, justifyContent: 'center', alignItems: 'center' },
   avatarLarge: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#eee' },
   avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 24, fontWeight: '700', color: '#666' },
+  cameraIcon: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#fff', borderRadius: 16, padding: 2, elevation: 2 },
 });
 
 export default ProfileScreen;
