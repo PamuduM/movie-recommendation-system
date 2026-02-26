@@ -22,11 +22,18 @@ const ChatScreen = () => {
 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null); // null = Everyone
   const flatRef = useRef<FlatList<ChatMessage> | null>(null);
 
   useEffect(() => {
     // announce presence (best-effort)
     socket.emit('user joined', { user: username });
+
+    // receive online user list
+    socket.on('users', (list: string[]) => {
+      setOnlineUsers(list || []);
+    });
 
     socket.on('chat message', (msg: ChatMessage) => {
       setMessages((prev) => [...prev, { ...msg, ts: msg.ts || Date.now() }]);
@@ -40,13 +47,15 @@ const ChatScreen = () => {
     return () => {
       socket.off('chat message');
       socket.off('user joined');
+      socket.off('users');
     };
   }, [username]);
 
   const sendMessage = () => {
     const trimmed = message.trim();
     if (!trimmed) return;
-    const payload: ChatMessage = { message: trimmed, user: username, ts: Date.now() };
+    const payload: ChatMessage & { to?: string } = { message: trimmed, user: username, ts: Date.now() };
+    if (selectedUser) payload.to = selectedUser;
     socket.emit('chat message', payload);
     setMessages((prev) => [...prev, payload]);
     setMessage('');
@@ -62,6 +71,7 @@ const ChatScreen = () => {
         <View style={[styles.bubble, isMe ? styles.bubbleMe : isSystem ? styles.bubbleSystem : styles.bubbleOther]}>
           {!isMe && !isSystem && <Text style={styles.sender}>{item.user}</Text>}
           <Text style={styles.msgText}>{item.message}</Text>
+          {('to' in item) && item['to'] ? <Text style={styles.toLabel}>to {item['to']}</Text> : null}
           <Text style={styles.ts}>{new Date(item.ts || Date.now()).toLocaleTimeString()}</Text>
         </View>
       </View>
@@ -78,17 +88,36 @@ const ChatScreen = () => {
         contentContainerStyle={styles.listContent}
       />
 
+      {/* online users */}
+      <View style={styles.userList}>
+        <FlatList
+          horizontal
+          data={[null, ...onlineUsers]}
+          keyExtractor={(u, i) => (u ?? 'everyone') + i}
+          renderItem={({ item }) => {
+            const isEveryone = item === null;
+            const name = isEveryone ? 'Everyone' : (item as string);
+            const selected = (selectedUser === null && isEveryone) || selectedUser === item;
+            return (
+              <TouchableOpacity onPress={() => setSelectedUser(isEveryone ? null : (item as string))} style={[styles.userPill, selected ? styles.userPillSelected : null]}>
+                <Text style={[styles.userPillText, selected ? styles.userPillTextSelected : null]}>{name}</Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
           value={message}
           onChangeText={setMessage}
-          placeholder="Type a message..."
+          placeholder={selectedUser ? `Message @${selectedUser}` : 'Type a message...'}
           returnKeyType="send"
           onSubmitEditing={sendMessage}
         />
-        <TouchableOpacity style={styles.sendBtn} onPress={sendMessage}>
-          <Text style={styles.sendTxt}>Send</Text>
+        <TouchableOpacity style={[styles.sendBtn, selectedUser ? styles.sendBtnPrivate : null]} onPress={sendMessage}>
+          <Text style={styles.sendTxt}>{selectedUser ? `Send to ${selectedUser}` : 'Send'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -112,6 +141,13 @@ const styles = StyleSheet.create({
   input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 },
   sendBtn: { backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, justifyContent: 'center' },
   sendTxt: { color: '#fff', fontWeight: '600' },
+  userList: { position: 'absolute', left: 12, right: 12, bottom: 64, height: 40 },
+  userPill: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f0f0f0', borderRadius: 20, marginRight: 8 },
+  userPillSelected: { backgroundColor: '#007AFF' },
+  userPillText: { color: '#333', fontWeight: '600' },
+  userPillTextSelected: { color: '#fff' },
+  toLabel: { fontSize: 11, color: '#555', marginTop: 4 },
+  sendBtnPrivate: { backgroundColor: '#34c759' },
 });
 
 export default ChatScreen;
