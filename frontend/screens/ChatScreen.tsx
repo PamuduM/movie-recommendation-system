@@ -8,8 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Image,
 } from 'react-native';
 import { socket } from '../services/socket';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +23,7 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null); // null = Everyone
+  const [selectedView, setSelectedView] = useState<'all' | 'dm'>('all');
   const flatRef = useRef<FlatList<ChatMessage> | null>(null);
 
   useEffect(() => {
@@ -45,9 +45,9 @@ const ChatScreen = () => {
     });
 
     return () => {
-      socket.off('chat message');
-      socket.off('user joined');
-      socket.off('users');
+    socket.off('chat message');
+    socket.off('user joined');
+    socket.off('users');
     };
   }, [username]);
 
@@ -66,14 +66,31 @@ const ChatScreen = () => {
   const renderItem = ({ item }: { item: ChatMessage }) => {
     const isSystem = item.user === 'system';
     const isMe = item.user && item.user === username;
+    const avatarUri = !isSystem && item.user === username ? (user?.avatar || null) : null;
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowRight : styles.msgRowLeft]}>
+        {!isMe && !isSystem && (
+          <View style={styles.msgAvatarWrap}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarSmall} />
+            ) : (
+              <View style={styles.avatarPlaceholderSmall}><Text style={styles.avatarInitialsSmall}>{(item.user||'U').slice(0,2).toUpperCase()}</Text></View>
+            )}
+          </View>
+        )}
         <View style={[styles.bubble, isMe ? styles.bubbleMe : isSystem ? styles.bubbleSystem : styles.bubbleOther]}>
           {!isMe && !isSystem && <Text style={styles.sender}>{item.user}</Text>}
           <Text style={styles.msgText}>{item.message}</Text>
           {('to' in item) && item['to'] ? <Text style={styles.toLabel}>to {item['to']}</Text> : null}
           <Text style={styles.ts}>{new Date(item.ts || Date.now()).toLocaleTimeString()}</Text>
         </View>
+        {isMe && !isSystem && (
+          <View style={styles.msgAvatarWrapRight}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarSmall} />
+            ) : null}
+          </View>
+        )}
       </View>
     );
   };
@@ -82,7 +99,17 @@ const ChatScreen = () => {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
       <FlatList
         ref={flatRef}
-        data={messages}
+        data={
+          selectedUser
+            ? messages.filter(
+                (m) =>
+                  m.user === 'system' ||
+                  (m.user === username && (m as any).to === selectedUser) ||
+                  (m.user === selectedUser && ((m as any).to === username || !(m as any).to)) ||
+                  false
+              )
+            : messages
+        }
         renderItem={renderItem}
         keyExtractor={(_, i) => i.toString()}
         contentContainerStyle={styles.listContent}
@@ -92,14 +119,33 @@ const ChatScreen = () => {
       <View style={styles.userList}>
         <FlatList
           horizontal
-          data={[null, ...onlineUsers]}
+          data={[null, ...onlineUsers.filter((u) => u !== username)]}
           keyExtractor={(u, i) => (u ?? 'everyone') + i}
           renderItem={({ item }) => {
             const isEveryone = item === null;
             const name = isEveryone ? 'Everyone' : (item as string);
             const selected = (selectedUser === null && isEveryone) || selectedUser === item;
+            const initials = isEveryone ? 'E' : (item as string).split(' ').map((s) => s[0]).join('').slice(0,2).toUpperCase();
             return (
-              <TouchableOpacity onPress={() => setSelectedUser(isEveryone ? null : (item as string))} style={[styles.userPill, selected ? styles.userPillSelected : null]}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (isEveryone) {
+                    setSelectedUser(null);
+                    setSelectedView('all');
+                  } else {
+                    setSelectedUser(item as string);
+                    setSelectedView('dm');
+                  }
+                }}
+                style={[styles.userPill, selected ? styles.userPillSelected : null]}
+              >
+                {(item === username && user?.avatar) ? (
+                  <Image source={{ uri: user.avatar }} style={[styles.avatar, selected ? styles.avatarSelected : null]} />
+                ) : (
+                  <View style={[styles.avatar, selected ? styles.avatarSelected : null]}>
+                    <Text style={[styles.avatarText, selected ? styles.userPillTextSelected : null]}>{initials}</Text>
+                  </View>
+                )}
                 <Text style={[styles.userPillText, selected ? styles.userPillTextSelected : null]}>{name}</Text>
               </TouchableOpacity>
             );
@@ -148,6 +194,11 @@ const styles = StyleSheet.create({
   userPillTextSelected: { color: '#fff' },
   toLabel: { fontSize: 11, color: '#555', marginTop: 4 },
   sendBtnPrivate: { backgroundColor: '#34c759' },
+  avatarSmall: { width: 32, height: 32, borderRadius: 16 },
+  avatarPlaceholderSmall: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
+  avatarInitialsSmall: { fontSize: 12, fontWeight: '700', color: '#666' },
+  msgAvatarWrap: { width: 40, alignItems: 'center', justifyContent: 'flex-end', marginRight: 6 },
+  msgAvatarWrapRight: { width: 40, alignItems: 'center', justifyContent: 'flex-start', marginLeft: 6 },
 });
 
 export default ChatScreen;

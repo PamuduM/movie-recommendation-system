@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Button, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Button, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,8 @@ type FollowUser = {
   avatar?: string | null;
   bio?: string | null;
 };
+
+import * as ImagePicker from 'expo-image-picker';
 
 const ProfileScreen = () => {
   const { user, logout, updateProfile } = useAuth();
@@ -36,6 +38,45 @@ const ProfileScreen = () => {
     setAvatar(user.avatar ?? '');
     setBio(user.bio ?? '');
   }, [user]);
+
+  const pickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your photos to choose an avatar.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+      const uri = (res as any).assets?.[0]?.uri ?? (res as any).uri;
+      if (uri) {
+        setAvatar(uri);
+        setError(null);
+        setMessage('Uploading avatar...');
+        try {
+          const updated = await updateProfile({ avatar: uri });
+          setMessage('Avatar updated');
+          setAvatar(updated.avatar ?? '');
+        } catch (e: any) {
+          setError(e?.response?.data?.error ?? e?.message ?? 'Failed to update avatar');
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Image picker error');
+    }
+  };
+
+  const removeAvatar = async () => {
+    if (!user) return;
+    setMessage(null);
+    setError(null);
+    try {
+      const updated = await updateProfile({ avatar: '' });
+      setAvatar(updated.avatar ?? '');
+      setMessage('Avatar removed');
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.message ?? 'Failed to remove avatar');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -121,6 +162,20 @@ const ProfileScreen = () => {
     <View style={styles.container}>
       {user ? (
         <View style={styles.card}>
+          <View style={styles.avatarRow}>
+            {avatar ? (
+              <Image source={{ uri: avatar }} style={styles.avatarLarge} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitials}>{(user.username || 'U').slice(0,2).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={{ marginLeft: 12 }}>
+              <Button title="Choose avatar" onPress={pickAvatar} />
+              <View style={{ height: 8 }} />
+              <Button title="Remove avatar" onPress={removeAvatar} color="#b00020" />
+            </View>
+          </View>
           <View style={styles.fieldRow}>
             <Text style={styles.labelCol}>Username</Text>
             <TextInput
@@ -267,6 +322,10 @@ const styles = StyleSheet.create({
   userName: { fontSize: 15, fontWeight: '600' },
   userBio: { marginTop: 4, color: '#666' },
   emptyText: { marginTop: 8, color: '#666' },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatarLarge: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#eee' },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 24, fontWeight: '700', color: '#666' },
 });
 
 export default ProfileScreen;
