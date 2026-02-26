@@ -54,6 +54,9 @@ io.on('connection', (socket) => {
   socket.on('chat message', (msg) => {
     io.emit('chat message', msg);
   });
+  socket.on('user joined', (payload) => {
+    io.emit('user joined', payload);
+  });
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
