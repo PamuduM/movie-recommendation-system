@@ -1,5 +1,3 @@
-"""Hybrid movie recommendation module for FlickX (standalone)."""
-
 from __future__ import annotations
 
 import argparse
