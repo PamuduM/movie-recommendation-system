@@ -8,6 +8,25 @@
 			"args": [],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Start Backend Server",
+			"type": "shell",
+			"command": "npm start",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Backup Project",
+			"type": "shell",
+			"command": "robocopy . \"..\\FlickX-backup-2026-02-27\" /MIR /XD node_modules frontend\\node_modules .venv .git /NFL /NDL /NJH /NJS",
+			"isBackground": false
+		},
+		{
+			"label": "Start Frontend (Expo)",
+			"type": "shell",
+			"command": "cd frontend && npm start",
+			"isBackground": false
 		}
 	]
 }
