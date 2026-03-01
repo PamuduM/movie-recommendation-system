@@ -159,33 +159,67 @@ const ProfileScreen = () => {
     }
   };
 
+  const handleAvatarPress = () => {
+    pickAvatar();
+  };
+
+  const handleFollowersPress = () => {
+    const text = followers.length ? followers.map((item) => item.username).join('\n') : 'No followers yet.';
+    Alert.alert('Followers', text);
+  };
+
+  const handleFollowingPress = () => {
+    const text = following.length ? following.map((item) => item.username).join('\n') : 'Not following anyone yet.';
+    Alert.alert('Following', text);
+  };
+
   return (
-          <>
-            <View style={styles.avatarContainer}>
+    <View style={styles.container}>
+      {user ? (
+        <View style={styles.card}>
+          <View style={styles.profileHeader}>
+            <View>
               <TouchableOpacity onPress={handleAvatarPress}>
-                <Image
-                  source={avatar ? { uri: avatar } : require("../assets/images/avatar.png")}
-                  style={styles.avatar}
-                />
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.avatarLarge} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitials}>{(user.username || 'U').slice(0, 2).toUpperCase()}</Text>
+                  </View>
+                )}
                 <View style={styles.cameraIconContainer}>
                   <MaterialIcons name="photo-camera" size={24} color="#fff" />
                 </View>
               </TouchableOpacity>
-            </View>
-            <Text style={styles.username}>{user?.username}</Text>
-            <Text style={styles.email}>{user?.email}</Text>
-            <View style={styles.statsContainer}>
-              <TouchableOpacity onPress={handleFollowersPress}>
-                <Text style={styles.statsNumber}>{user?.followers?.length || 0}</Text>
-                <Text style={styles.statsLabel}>Followers</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleFollowingPress}>
-                <Text style={styles.statsNumber}>{user?.following?.length || 0}</Text>
-                <Text style={styles.statsLabel}>Following</Text>
+              <TouchableOpacity onPress={removeAvatar} style={styles.removeAvatarBtn}>
+                <Text style={styles.removeAvatarText}>Remove avatar</Text>
               </TouchableOpacity>
             </View>
-          </>
+
+            <View style={styles.profileInfo}>
+              <Text style={styles.username}>{user?.username}</Text>
+              <Text style={styles.email}>{user?.email}</Text>
+              <View style={styles.statsContainer}>
+                <TouchableOpacity onPress={handleFollowersPress}>
+                  <Text style={styles.statsNumber}>{followers.length}</Text>
+                  <Text style={styles.statsLabel}>Followers</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleFollowingPress}>
+                  <Text style={styles.statsNumber}>{following.length}</Text>
+                  <Text style={styles.statsLabel}>Following</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <Text style={styles.labelCol}>Username</Text>
+            <TextInput
+              style={[styles.input, styles.inputRow]}
+              value={username}
+              onChangeText={setUsername}
               autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
@@ -217,12 +251,12 @@ const ProfileScreen = () => {
 
           <View style={styles.fieldRow}>
             <Text style={styles.labelCol}>Email status</Text>
-            <Text style={[styles.value, styles.valueRow]}>{user.emailVerified ? 'Verified' : 'Not verified'}</Text>
+            <Text style={[styles.value, styles.valueRow]}>{user?.emailVerified ? 'Verified' : 'Not verified'}</Text>
           </View>
 
           <Button title={saving ? 'Saving…' : 'Save changes'} onPress={onSave} disabled={saving} />
 
-          {!user.emailVerified ? (
+          {!user?.emailVerified ? (
             <View style={styles.actionSpacing}>
               <Button title="Verify email" onPress={() => router.push('/verify-email')} />
             </View>
@@ -239,23 +273,20 @@ const ProfileScreen = () => {
             <Button title="Search users" onPress={handleUserSearch} />
             <FlatList
               data={userResultsWithFollowState}
+              keyExtractor={(item) => String(item.id)}
               renderItem={({ item }) => (
                 <View style={styles.userRow}>
-                  <View style={styles.avatarContainer}>
-                    {avatar ? (
-                      <Image source={{ uri: avatar }} style={styles.avatarLarge} />
-                    ) : (
-                      <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarInitials}>{(user.username || 'U').slice(0,2).toUpperCase()}</Text>
-                      </View>
-                    )}
-                    <TouchableOpacity style={styles.cameraIcon} onPress={pickAvatar}>
-                      <MaterialIcons name="photo-camera" size={28} color="#444" />
-                    </TouchableOpacity>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{item.username}</Text>
+                    {item.bio ? <Text style={styles.userBio}>{item.bio}</Text> : null}
                   </View>
-                  <View style={{ marginLeft: 12 }}>
-                    <Button title="Remove avatar" onPress={removeAvatar} color="#b00020" />
-                  </View>
+                  <Button
+                    title={item.isFollowing ? 'Unfollow' : 'Follow'}
+                    onPress={() => toggleFollow(item)}
+                    disabled={followBusyId === item.id}
+                  />
+                </View>
+              )}
               ListEmptyComponent={
                 userQuery.trim().length >= 2 ? <Text style={styles.emptyText}>No users found.</Text> : null
               }
@@ -308,6 +339,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  profileInfo: { flex: 1, marginLeft: 16 },
+  username: { fontSize: 18, fontWeight: '700' },
+  email: { fontSize: 14, color: '#666', marginTop: 4 },
+  statsContainer: { flexDirection: 'row', gap: 16, marginTop: 12 },
+  statsNumber: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  statsLabel: { fontSize: 12, color: '#666', textAlign: 'center' },
   label: { fontSize: 12, color: '#666', marginTop: 8 },
   value: { fontSize: 16, fontWeight: '600' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginTop: 6 },
@@ -334,6 +372,9 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 24, fontWeight: '700', color: '#666' },
   cameraIcon: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#fff', borderRadius: 16, padding: 2, elevation: 2 },
+  cameraIconContainer: { position: 'absolute', bottom: 4, right: 4, backgroundColor: '#00000088', padding: 6, borderRadius: 16 },
+  removeAvatarBtn: { marginTop: 8 },
+  removeAvatarText: { color: '#b00020', fontSize: 12 },
 });
 
 export default ProfileScreen;
