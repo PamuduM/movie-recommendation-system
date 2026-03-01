@@ -41,7 +41,7 @@ const formatTime = (value?: string | null) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const ChatScreen = () => {
+function ChatScreen() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
@@ -69,7 +69,9 @@ const ChatScreen = () => {
       setContactsLoading(true);
       setContactsError(null);
       try {
-        const data = await fetchChatContacts(query && query.trim().length ? query : undefined);
+        const data: Contact[] = await fetchChatContacts(
+          query && query.trim().length ? query : undefined
+        );
         setContacts(data);
         if (!data.length) {
           setSelectedContactId(null);
@@ -91,7 +93,7 @@ const ChatScreen = () => {
       setThreadLoading(true);
       setThreadError(null);
       try {
-        const data = await fetchChatThread(userId, contactId);
+        const data: ThreadMessage[] = await fetchChatThread(userId, contactId);
         setThread(data);
         setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 50);
       } catch (error) {
