@@ -277,6 +277,25 @@ export const fetchFollowing = async (userId: number) => {
   return response.data;
 };
 
+export const fetchChatContacts = async (query?: string) => {
+  const response = await api.get('/chats/contacts', {
+    params: query ? { q: query } : undefined,
+  });
+  return response.data;
+};
+
+export const fetchChatThread = async (userId: number, partnerId: number) => {
+  const response = await api.get(`/chats/${userId}`, {
+    params: { with: partnerId },
+  });
+  return response.data;
+};
+
+export const sendChatMessage = async (receiverId: number, message: string) => {
+  const response = await api.post('/chats', { receiverId, message });
+  return response.data;
+};
+
 // Example: Fetch notifications for a user
 export const fetchNotifications = async (userId: number) => {
   const response = await api.get(`/notifications/${userId}`);

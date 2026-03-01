@@ -1,204 +1,372 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
+  View,
 } from 'react-native';
-import { socket } from '../services/socket';
-import { useAuth } from '../contexts/AuthContext';
 
-type ChatMessage = { message: string; user?: string; ts?: number };
+import { useAuth } from '../contexts/AuthContext';
+import { fetchChatContacts, fetchChatThread, sendChatMessage } from '../services/api';
+
+type Contact = {
+  id: number;
+  username: string;
+  avatar?: string | null;
+  bio?: string | null;
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+};
+
+type ThreadMessage = {
+  id: number;
+  senderId: number;
+  receiverId: number;
+  message: string;
+  createdAt: string;
+  sender?: { id: number; username: string; avatar?: string | null };
+  receiver?: { id: number; username: string; avatar?: string | null };
+};
+
+const formatTime = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
 
 const ChatScreen = () => {
   const { user } = useAuth();
-  const username = user?.username || 'Anonymous';
+  const userId = user?.id ?? null;
 
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
+  const selectedContact = useMemo(
+    () => contacts.find((contact) => contact.id === selectedContactId) ?? null,
+    [contacts, selectedContactId]
+  );
+
+  const [thread, setThread] = useState<ThreadMessage[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null); // null = Everyone
-  const [selectedView, setSelectedView] = useState<'all' | 'dm'>('all');
-  const flatRef = useRef<FlatList<ChatMessage> | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const flatRef = useRef<FlatList<ThreadMessage> | null>(null);
+
+  const loadContacts = useCallback(
+    async (query?: string) => {
+      setContactsLoading(true);
+      setContactsError(null);
+      try {
+        const data = await fetchChatContacts(query && query.trim().length ? query : undefined);
+        setContacts(data);
+        if (!data.length) {
+          setSelectedContactId(null);
+        } else if (!selectedContactId || !data.some((item) => item.id === selectedContactId)) {
+          setSelectedContactId(data[0].id);
+        }
+      } catch (error) {
+        setContactsError('Failed to load followers. Pull to refresh.');
+      } finally {
+        setContactsLoading(false);
+      }
+    },
+    [selectedContactId]
+  );
+
+  const loadThread = useCallback(
+    async (contactId: number) => {
+      if (!userId) return;
+      setThreadLoading(true);
+      setThreadError(null);
+      try {
+        const data = await fetchChatThread(userId, contactId);
+        setThread(data);
+        setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 50);
+      } catch (error) {
+        setThreadError('Failed to load conversation.');
+        setThread([]);
+      } finally {
+        setThreadLoading(false);
+      }
+    },
+    [userId]
+  );
 
   useEffect(() => {
-    // announce presence (best-effort)
-    socket.emit('user joined', { user: username });
+    if (!userId) return;
+    const handle = setTimeout(() => {
+      loadContacts(searchTerm);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [userId, searchTerm, loadContacts]);
 
-    // receive online user list
-    socket.on('users', (list: string[]) => {
-      setOnlineUsers(list || []);
-    });
+  useEffect(() => {
+    if (selectedContactId) {
+      loadThread(selectedContactId);
+    } else {
+      setThread([]);
+    }
+  }, [selectedContactId, loadThread]);
 
-    socket.on('chat message', (msg: ChatMessage) => {
-      setMessages((prev) => [...prev, { ...msg, ts: msg.ts || Date.now() }]);
-    });
-
-    // show user joins (server may ignore)
-    socket.on('user joined', (payload: any) => {
-      setMessages((prev) => [...prev, { message: `${payload.user} joined`, user: 'system', ts: Date.now() }]);
-    });
-
-    return () => {
-    socket.off('chat message');
-    socket.off('user joined');
-    socket.off('users');
-    };
-  }, [username]);
-
-  const sendMessage = () => {
+  const handleSend = async () => {
+    if (!selectedContactId) return;
     const trimmed = message.trim();
     if (!trimmed) return;
-    const payload: ChatMessage & { to?: string } = { message: trimmed, user: username, ts: Date.now() };
-    if (selectedUser) payload.to = selectedUser;
-    socket.emit('chat message', payload);
-    setMessages((prev) => [...prev, payload]);
-    setMessage('');
-    // scroll to bottom after a small delay
-    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 50);
+    setSending(true);
+    setThreadError(null);
+    try {
+      await sendChatMessage(selectedContactId, trimmed);
+      setMessage('');
+      await Promise.all([loadThread(selectedContactId), loadContacts(searchTerm)]);
+    } catch (error) {
+      setThreadError('Failed to send message.');
+    } finally {
+      setSending(false);
+    }
   };
 
-  const renderItem = ({ item }: { item: ChatMessage }) => {
-    const isSystem = item.user === 'system';
-    const isMe = item.user && item.user === username;
-    const avatarUri = !isSystem && item.user === username ? (user?.avatar || null) : null;
+  const renderContact = ({ item }: { item: Contact }) => {
+    const isSelected = item.id === selectedContactId;
+    const initials = item.username.slice(0, 2).toUpperCase();
+    return (
+      <TouchableOpacity
+        onPress={() => setSelectedContactId(item.id)}
+        style={[styles.contactRow, isSelected ? styles.contactRowActive : null]}
+      >
+        {item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={styles.contactAvatar} />
+        ) : (
+          <View style={styles.contactAvatarPlaceholder}>
+            <Text style={styles.contactAvatarText}>{initials}</Text>
+          </View>
+        )}
+        <View style={styles.contactMeta}>
+          <View style={styles.contactTitleRow}>
+            <Text style={styles.contactName}>{item.username}</Text>
+            <Text style={styles.contactTime}>{formatTime(item.lastMessageAt)}</Text>
+          </View>
+          <Text style={styles.contactLast} numberOfLines={1}>
+            {item.lastMessage || item.bio || 'No messages yet'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderMessage = ({ item }: { item: ThreadMessage }) => {
+    const isMe = item.senderId === userId;
+    const partnerAvatar = isMe ? user?.avatar : selectedContact?.avatar;
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowRight : styles.msgRowLeft]}>
-        {!isMe && !isSystem && (
-          <View style={styles.msgAvatarWrap}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarSmall} />
+        {!isMe && (
+          <View style={styles.msgAvatarSlot}>
+            {partnerAvatar ? (
+              <Image source={{ uri: partnerAvatar }} style={styles.msgAvatar} />
             ) : (
-              <View style={styles.avatarPlaceholderSmall}><Text style={styles.avatarInitialsSmall}>{(item.user||'U').slice(0,2).toUpperCase()}</Text></View>
+              <View style={styles.msgAvatarPlaceholder}>
+                <Text style={styles.msgAvatarInitials}>{selectedContact?.username.slice(0, 2).toUpperCase()}</Text>
+              </View>
             )}
           </View>
         )}
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : isSystem ? styles.bubbleSystem : styles.bubbleOther]}>
-          {!isMe && !isSystem && <Text style={styles.sender}>{item.user}</Text>}
+        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
           <Text style={styles.msgText}>{item.message}</Text>
-          {('to' in item) && item['to'] ? <Text style={styles.toLabel}>to {item['to']}</Text> : null}
-          <Text style={styles.ts}>{new Date(item.ts || Date.now()).toLocaleTimeString()}</Text>
+          <Text style={styles.msgTime}>{formatTime(item.createdAt)}</Text>
         </View>
-        {isMe && !isSystem && (
-          <View style={styles.msgAvatarWrapRight}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarSmall} />
-            ) : null}
-          </View>
-        )}
       </View>
     );
   };
 
-  return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
-      <FlatList
-        ref={flatRef}
-        data={
-          selectedUser
-            ? messages.filter(
-                (m) =>
-                  m.user === 'system' ||
-                  (m.user === username && (m as any).to === selectedUser) ||
-                  (m.user === selectedUser && ((m as any).to === username || !(m as any).to)) ||
-                  false
-              )
-            : messages
-        }
-        renderItem={renderItem}
-        keyExtractor={(_, i) => i.toString()}
-        contentContainerStyle={styles.listContent}
-      />
+  if (!userId) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.muted}>Log in to chat with your followers.</Text>
+      </View>
+    );
+  }
 
-      {/* online users */}
-      <View style={styles.userList}>
-        <FlatList
-          horizontal
-          data={[null, ...onlineUsers.filter((u) => u !== username)]}
-          keyExtractor={(u, i) => (u ?? 'everyone') + i}
-          renderItem={({ item }) => {
-            const isEveryone = item === null;
-            const name = isEveryone ? 'Everyone' : (item as string);
-            const selected = (selectedUser === null && isEveryone) || selectedUser === item;
-            const initials = isEveryone ? 'E' : (item as string).split(' ').map((s) => s[0]).join('').slice(0,2).toUpperCase();
-            return (
-              <TouchableOpacity
-                onPress={() => {
-                  if (isEveryone) {
-                    setSelectedUser(null);
-                    setSelectedView('all');
-                  } else {
-                    setSelectedUser(item as string);
-                    setSelectedView('dm');
-                  }
-                }}
-                style={[styles.userPill, selected ? styles.userPillSelected : null]}
-              >
-                {(item === username && user?.avatar) ? (
-                  <Image source={{ uri: user.avatar }} style={[styles.avatar, selected ? styles.avatarSelected : null]} />
-                ) : (
-                  <View style={[styles.avatar, selected ? styles.avatarSelected : null]}>
-                    <Text style={[styles.avatarText, selected ? styles.userPillTextSelected : null]}>{initials}</Text>
-                  </View>
-                )}
-                <Text style={[styles.userPillText, selected ? styles.userPillTextSelected : null]}>{name}</Text>
-              </TouchableOpacity>
-            );
-          }}
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={96}
+    >
+      <View style={styles.contactsPanel}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search followers"
+          value={searchTerm}
+          onChangeText={setSearchTerm}
         />
+        {contactsLoading ? (
+          <ActivityIndicator style={styles.loadingIndicator} />
+        ) : contactsError ? (
+          <Text style={styles.errorText}>{contactsError}</Text>
+        ) : (
+          <FlatList
+            data={contacts}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderContact}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={<Text style={styles.muted}>Follow users to start chatting.</Text>}
+          />
+        )}
       </View>
 
-      <View style={styles.composer}>
-        <TextInput
-          style={styles.input}
-          value={message}
-          onChangeText={setMessage}
-          placeholder={selectedUser ? `Message @${selectedUser}` : 'Type a message...'}
-          returnKeyType="send"
-          onSubmitEditing={sendMessage}
-        />
-        <TouchableOpacity style={[styles.sendBtn, selectedUser ? styles.sendBtnPrivate : null]} onPress={sendMessage}>
-          <Text style={styles.sendTxt}>{selectedUser ? `Send to ${selectedUser}` : 'Send'}</Text>
-        </TouchableOpacity>
+      <View style={styles.threadPanel}>
+        {selectedContact ? (
+          <>
+            <View style={styles.threadHeader}>
+              <Text style={styles.threadTitle}>{selectedContact.username}</Text>
+              <Text style={styles.threadSubtitle}>{selectedContact.bio || 'Follower'}</Text>
+            </View>
+            {threadLoading ? (
+              <ActivityIndicator style={styles.loadingIndicator} />
+            ) : threadError ? (
+              <Text style={styles.errorText}>{threadError}</Text>
+            ) : (
+              <FlatList
+                ref={flatRef}
+                data={thread}
+                renderItem={renderMessage}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.threadList}
+              />
+            )}
+
+            <View style={styles.composer}>
+              <TextInput
+                style={styles.input}
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Type a message"
+                editable={!sending}
+                multiline
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, (!message.trim() || sending) && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!message.trim() || sending}
+              >
+                <Text style={styles.sendTxt}>{sending ? 'Sending…' : 'Send'}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.muted}>Select a follower to start chatting.</Text>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  listContent: { padding: 12, paddingBottom: 80 },
-  msgRow: { marginVertical: 6, flexDirection: 'row', alignItems: 'flex-end' },
+  container: { flex: 1, backgroundColor: '#fff', padding: 12, gap: 12 },
+  contactsPanel: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 16,
+    padding: 12,
+    maxHeight: 240,
+    minHeight: 160,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  loadingIndicator: { marginVertical: 16 },
+  errorText: { color: '#b00020', textAlign: 'center', marginVertical: 8 },
+  separator: { height: 1, backgroundColor: '#eee', marginVertical: 6 },
+  contactRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4, borderRadius: 12 },
+  contactRowActive: { backgroundColor: '#e6f0ff' },
+  contactAvatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
+  contactAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    backgroundColor: '#dfe3eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactAvatarText: { color: '#4d5b76', fontWeight: '700' },
+  contactMeta: { flex: 1 },
+  contactTitleRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  contactName: { fontWeight: '700', fontSize: 15, color: '#111' },
+  contactTime: { fontSize: 11, color: '#666' },
+  contactLast: { color: '#555', fontSize: 13 },
+  threadPanel: {
+    flex: 1,
+    backgroundColor: '#fdfdfd',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f1f1f1',
+  },
+  threadHeader: { marginBottom: 8 },
+  threadTitle: { fontSize: 18, fontWeight: '700', color: '#111' },
+  threadSubtitle: { fontSize: 13, color: '#666', marginTop: 2 },
+  threadList: { paddingBottom: 80 },
+  msgRow: { flexDirection: 'row', marginVertical: 4 },
   msgRowLeft: { justifyContent: 'flex-start' },
   msgRowRight: { justifyContent: 'flex-end' },
-  bubble: { maxWidth: '80%', padding: 10, borderRadius: 12 },
-  bubbleMe: { backgroundColor: '#007AFF', borderTopRightRadius: 2 },
-  bubbleOther: { backgroundColor: '#E5E5EA' },
-  bubbleSystem: { backgroundColor: '#FFF3CD' },
-  sender: { fontSize: 12, fontWeight: '600', marginBottom: 4, color: '#333' },
-  msgText: { color: '#000' },
-  ts: { fontSize: 10, color: '#666', marginTop: 6, alignSelf: 'flex-end' },
-  composer: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', padding: 8, borderTopWidth: 1, borderColor: '#eee', backgroundColor: '#fff' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 },
-  sendBtn: { backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, justifyContent: 'center' },
-  sendTxt: { color: '#fff', fontWeight: '600' },
-  userList: { position: 'absolute', left: 12, right: 12, bottom: 64, height: 40 },
-  userPill: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f0f0f0', borderRadius: 20, marginRight: 8 },
-  userPillSelected: { backgroundColor: '#007AFF' },
-  userPillText: { color: '#333', fontWeight: '600' },
-  userPillTextSelected: { color: '#fff' },
-  toLabel: { fontSize: 11, color: '#555', marginTop: 4 },
-  sendBtnPrivate: { backgroundColor: '#34c759' },
-  avatarSmall: { width: 32, height: 32, borderRadius: 16 },
-  avatarPlaceholderSmall: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
-  avatarInitialsSmall: { fontSize: 12, fontWeight: '700', color: '#666' },
-  msgAvatarWrap: { width: 40, alignItems: 'center', justifyContent: 'flex-end', marginRight: 6 },
-  msgAvatarWrapRight: { width: 40, alignItems: 'center', justifyContent: 'flex-start', marginLeft: 6 },
+  msgAvatarSlot: { width: 36, marginRight: 6, alignItems: 'flex-end' },
+  msgAvatar: { width: 32, height: 32, borderRadius: 16 },
+  msgAvatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgAvatarInitials: { fontSize: 11, fontWeight: '700', color: '#555' },
+  bubble: { maxWidth: '78%', padding: 10, borderRadius: 16 },
+  bubbleMe: { backgroundColor: '#d1f8c0', borderBottomRightRadius: 4, marginLeft: 40 },
+  bubbleOther: { backgroundColor: '#fff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#eee', marginRight: 40 },
+  msgText: { fontSize: 15, color: '#111' },
+  msgTime: { fontSize: 11, color: '#666', marginTop: 6, textAlign: 'right' },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', borderTopWidth: 1, borderColor: '#eee', paddingTop: 8, gap: 8 },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxHeight: 96,
+    backgroundColor: '#fff',
+  },
+  sendBtn: {
+    backgroundColor: '#0a84ff',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 16,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  sendBtnDisabled: { backgroundColor: '#aac8ff' },
+  sendTxt: { color: '#fff', fontWeight: '700' },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  muted: { color: '#777', textAlign: 'center' },
 });
 
 export default ChatScreen;
