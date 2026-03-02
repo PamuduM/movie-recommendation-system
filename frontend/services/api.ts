@@ -167,6 +167,8 @@ export type MoodRecommendation = {
   moodScore?: number;
   moodTag?: string | null;
   genres?: string[];
+  rating?: number | null;
+  ratingCount?: number;
 };
 
 export type MoodRecommendationResponse =

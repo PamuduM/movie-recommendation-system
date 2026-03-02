@@ -4,6 +4,8 @@ const axios = require('axios');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { randomUUID } = require('crypto');
 const sequelize = require('../config/database');
 const { Movie, Favorite, Watchlist, Review } = require('../models');
 
@@ -96,7 +98,29 @@ const SQLITE_STORAGE_PATH = (() => {
 	if (!storage) return null;
 	return path.isAbsolute(storage) ? storage : path.resolve(BACKEND_ROOT, storage);
 })();
-const AI_SCRIPT_AVAILABLE = fs.existsSync(PYTHON_SCRIPT_PATH) && Boolean(SQLITE_STORAGE_PATH);
+const AI_SCRIPT_AVAILABLE = fs.existsSync(PYTHON_SCRIPT_PATH);
+
+const TMDB_GENRE_LABELS = {
+	28: 'Action',
+	12: 'Adventure',
+	16: 'Animation',
+	35: 'Comedy',
+	80: 'Crime',
+	99: 'Documentary',
+	18: 'Drama',
+	10751: 'Family',
+	14: 'Fantasy',
+	36: 'History',
+	27: 'Horror',
+	10402: 'Music',
+	9648: 'Mystery',
+	10749: 'Romance',
+	878: 'Sci-Fi',
+	10770: 'TV Movie',
+	53: 'Thriller',
+	10752: 'War',
+	37: 'Western',
+};
 
 const cleanText = (text = '') =>
 	String(text)
@@ -116,6 +140,11 @@ const detectMoodFromText = (text = '') => {
 };
 
 const clamp01 = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+
+const seededRandom = (seed = 1) => {
+	const x = Math.sin(seed) * 10000;
+	return x - Math.floor(x);
+};
 
 const buildRatingMap = async (movieIds = []) => {
 	if (!Array.isArray(movieIds) || movieIds.length === 0) return new Map();
@@ -150,14 +179,13 @@ const buildRatingMap = async (movieIds = []) => {
 	}
 };
 
-const runPythonKeywordSearch = async ({ query, focusGenres = [], topN = 40 } = {}) => {
+const runPythonKeywordSearch = async ({ query, focusGenres = [], topN = 40, dataset = null } = {}) => {
 	if (!AI_SCRIPT_AVAILABLE || !query?.trim() || PYTHON_COMMANDS.length === 0) return null;
+	let tempFilePath = null;
 	const args = [
 		PYTHON_SCRIPT_PATH,
 		'--mode',
 		'keyword',
-		'--db',
-		SQLITE_STORAGE_PATH,
 		'--query',
 		query.trim(),
 		'--top-n',
@@ -168,12 +196,27 @@ const runPythonKeywordSearch = async ({ query, focusGenres = [], topN = 40 } = {
 	if (focusGenres.length) {
 		args.push('--genres', focusGenres.join(','));
 	}
-	for (const command of PYTHON_COMMANDS) {
-		if (!command) continue;
-		const payload = await spawnPython(command, args);
-		if (payload) return payload;
+	try {
+		if (Array.isArray(dataset) && dataset.length > 0) {
+			tempFilePath = path.join(os.tmpdir(), `flickx-mood-${randomUUID()}.json`);
+			await fs.promises.writeFile(tempFilePath, JSON.stringify({ movies: dataset }), 'utf8');
+			args.push('--input-json', tempFilePath);
+		} else if (SQLITE_STORAGE_PATH) {
+			args.push('--db', SQLITE_STORAGE_PATH);
+		} else {
+			return null;
+		}
+		for (const command of PYTHON_COMMANDS) {
+			if (!command) continue;
+			const payload = await spawnPython(command, args);
+			if (payload) return payload;
+		}
+		return null;
+	} finally {
+		if (tempFilePath) {
+			fs.promises.unlink(tempFilePath).catch(() => undefined);
+		}
 	}
-	return null;
 };
 
 const spawnPython = (command, args) =>
@@ -206,6 +249,41 @@ const spawnPython = (command, args) =>
 			}
 		});
 	});
+
+const normalizeTmdbGenres = (genreIds = []) =>
+	Array.isArray(genreIds)
+		? genreIds
+			.map((id) => TMDB_GENRE_LABELS[id] || `Genre-${id}`)
+			.filter(Boolean)
+		: [];
+
+const buildPythonDataset = (localMovies = [], tmdbMovies = []) => {
+	const map = new Map();
+	const pushMovie = (movie) => {
+		if (!movie || !movie.id) return;
+		const numericId = Number(movie.id);
+		if (!Number.isFinite(numericId)) return;
+		if (map.has(numericId)) return;
+		map.set(numericId, {
+			id: numericId,
+			title: movie.title || movie.name || 'Untitled',
+			description: movie.description || movie.overview || '',
+			genres: Array.isArray(movie.genres) ? movie.genres : normalizeTmdbGenres(movie.genre_ids),
+			releaseDate: movie.releaseDate || movie.release_date || movie.first_air_date || null,
+		});
+	};
+	localMovies.forEach((movie) => {
+		pushMovie({
+			id: Number(movie.id),
+			title: movie.title,
+			description: movie.description,
+			genres: normalizeGenres(movie.genres),
+			releaseDate: movie.releaseDate,
+		});
+	});
+	tmdbMovies.forEach((movie) => pushMovie(movie));
+	return Array.from(map.values());
+};
 
 const normalizeGenres = (value) => {
 	if (!value) return [];
@@ -272,10 +350,11 @@ const fetchLatestMovies = async (limit = 50) => {
 };
 
 const jitterScore = (base, seedFactor = 0) => {
-	const deterministic = Math.sin(seedFactor + base * 100) * 0.1;
-	const noisy = base + deterministic + (Math.random() - 0.5) * 0.2;
+	const bias = Math.sin(seedFactor * 0.017 + base * 11) * 0.08;
+	const spread = (seededRandom(seedFactor * 0.001 + base) - 0.5) * 0.35;
+	const noisy = base + bias + spread;
 	if (Number.isNaN(noisy)) return base;
-	return Math.min(1, Math.max(0, noisy));
+	return clamp01(noisy);
 };
 
 /**
@@ -304,89 +383,108 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 		.join(' ');
 	const seed = Number.isFinite(Number(refreshNonce)) ? Number(refreshNonce) : Date.now();
 
+	const localPool = await fetchLatestMovies(Math.max(limit * 6, 60));
+	const tmdbRawPool = tmdbClient
+		? await fetchTmdbForMood(focusGenres, Math.max(limit * 5, 40), moodConfig.label, { raw: true })
+		: [];
+	const tmdbPool = tmdbRawPool
+		.map((movie) => ({
+			id: Number(movie.id),
+		title: movie.title || movie.name || 'Untitled',
+		overview: movie.overview || '',
+		poster_path: movie.poster_path || null,
+		release_date: movie.release_date || movie.first_air_date || null,
+		genres: normalizeTmdbGenres(movie.genre_ids),
+		vote_average: movie.vote_average ?? null,
+		vote_count: movie.vote_count ?? null,
+		genre_ids: movie.genre_ids || [],
+		}))
+		.filter((movie) => Number.isFinite(movie.id));
+
 	let pythonMatches = [];
 	let aiSource = 'heuristic';
 	try {
+		const dataset = buildPythonDataset(localPool, tmdbPool);
 		const result = await runPythonKeywordSearch({
 			query: queryTokens,
 			focusGenres,
-			topN: limit * 4,
+			topN: limit * 6,
+			dataset,
 		});
 		if (Array.isArray(result) && result.length) {
 			pythonMatches = result;
-			aiSource = 'python-keyword';
+			aiSource = tmdbPool.length ? 'python-keyword+tmdb' : 'python-keyword';
 		}
 	} catch (err) {
 		pythonMatches = [];
 	}
 
 	const pythonScoreMap = new Map();
-	const prioritizedIds = [];
 	pythonMatches.forEach((item, index) => {
 		const movieId = Number(item.movie_id ?? item.movieId ?? item.id);
 		if (!movieId || pythonScoreMap.has(movieId)) return;
 		const baseScore = typeof item.score === 'number' ? clamp01(item.score) : clamp01((pythonMatches.length - index) / pythonMatches.length);
 		pythonScoreMap.set(movieId, baseScore);
-		prioritizedIds.push(movieId);
 	});
 
-	let candidateMovies = [];
-	if (prioritizedIds.length) {
-		const prioritizedMovies = await Movie.findAll({ where: { id: prioritizedIds } });
-		const byId = new Map(prioritizedMovies.map((movie) => [Number(movie.id), movie]));
-		prioritizedIds.forEach((id) => {
-			const matching = byId.get(id);
-			if (matching) candidateMovies.push(matching);
-		});
-	}
+	const candidateMap = new Map();
+	const combinedCandidates = [];
+	const addCandidate = (entry) => {
+		const movieId = Number(entry.id);
+		if (!Number.isFinite(movieId) || candidateMap.has(movieId)) return;
+		candidateMap.set(movieId, entry);
+		combinedCandidates.push(entry);
+	};
 
-	if (candidateMovies.length < limit * 2) {
+	localPool.forEach((movie) => addCandidate({ type: 'local', id: Number(movie.id), movie }));
+	tmdbPool.forEach((movie) => addCandidate({ type: 'tmdb', id: Number(movie.id), movie }));
+
+	if (!combinedCandidates.length) {
 		const fallbackBatch = await fetchLatestMovies(limit * 3);
-		fallbackBatch.forEach((movie) => {
-			const movieId = Number(movie.id);
-			if (!movieId || pythonScoreMap.has(movieId)) return;
-			pythonScoreMap.set(movieId, scoreMovieForMood(movie, focusGenres));
-			candidateMovies.push(movie);
-		});
+		fallbackBatch.forEach((movie) => addCandidate({ type: 'local', id: Number(movie.id), movie }));
 	}
 
-	if (!candidateMovies.length) {
-		candidateMovies = await fetchLatestMovies(limit * 3);
-		candidateMovies.forEach((movie) => {
-			const movieId = Number(movie.id);
-			if (!pythonScoreMap.has(movieId)) {
-				pythonScoreMap.set(movieId, scoreMovieForMood(movie, focusGenres));
-			}
-		});
-	}
-
-	const uniqueCandidates = [];
-	const seenIds = new Set();
-	candidateMovies.forEach((movie) => {
-		const movieId = Number(movie.id);
-		if (!movieId || seenIds.has(movieId)) return;
-		seenIds.add(movieId);
-		uniqueCandidates.push(movie);
-	});
-
-	const ratingMap = await buildRatingMap(uniqueCandidates.map((movie) => movie.id));
-	const scoredEntries = uniqueCandidates.map((movie) => {
-		const movieId = Number(movie.id);
-		const moodScoreBase = pythonScoreMap.get(movieId) ?? scoreMovieForMood(movie, focusGenres);
-		const ratingStats = ratingMap.get(movieId) || { average: null, count: 0, normalized: 0, confidence: 0 };
+	const ratingMap = await buildRatingMap(localPool.map((movie) => movie.id));
+	const scoredEntries = combinedCandidates.map((entry) => {
+		const movieId = Number(entry.id);
+		const baseMovie = entry.type === 'local' ? entry.movie : { genres: entry.movie.genres };
+		const moodScoreBase = pythonScoreMap.get(movieId) ?? scoreMovieForMood(baseMovie, focusGenres);
+		let ratingStats;
+		if (entry.type === 'local') {
+			ratingStats = ratingMap.get(movieId) || { average: null, count: 0, normalized: 0, confidence: 0 };
+		} else {
+			const avg = Number(entry.movie.vote_average) || 0;
+			const count = Number(entry.movie.vote_count) || 0;
+			ratingStats = {
+				average: count ? Number(avg.toFixed(1)) : null,
+				count,
+				normalized: count ? clamp01(avg / 10) : 0,
+				confidence: count ? clamp01(Math.log10(1 + count) / 3) : 0,
+			};
+		}
 		const ratingWeighted = ratingStats.normalized * (0.8 + ratingStats.confidence * 0.2);
 		const blended = moodScoreBase * 0.55 + ratingWeighted * 0.35 + ratingStats.confidence * 0.1;
 		const finalScore = jitterScore(clamp01(blended), seed + movieId);
-		return { movie, finalScore, ratingStats };
+		return { entry, finalScore, ratingStats };
 	});
 
 	scoredEntries.sort((a, b) => b.finalScore - a.finalScore);
-	const recommendations = scoredEntries
-		.slice(0, limit)
-		.map(({ movie, finalScore, ratingStats }) => serializeMovie(movie, moodConfig.label, finalScore, ratingStats));
+	const recommendations = [];
+	const selectedIds = new Set();
+	scoredEntries.forEach(({ entry, finalScore, ratingStats }) => {
+		if (recommendations.length >= limit) return;
+		if (selectedIds.has(entry.id)) return;
+		selectedIds.add(entry.id);
+		if (entry.type === 'local') {
+			recommendations.push(serializeMovie(entry.movie, moodConfig.label, finalScore, ratingStats));
+		} else {
+			if (ratingStats.average) entry.movie.vote_average = ratingStats.average;
+			if (ratingStats.count) entry.movie.vote_count = ratingStats.count;
+			recommendations.push(serializeTmdbMovie(entry.movie, moodConfig.label, finalScore));
+		}
+	});
 
-	const selectedIds = new Set(recommendations.map((entry) => entry.id));
-	let tmdbUsed = false;
+	let tmdbUsed = recommendations.some((item) => !candidateMap.get(item.id)?.type || candidateMap.get(item.id)?.type === 'tmdb');
 	if (recommendations.length < limit && tmdbClient) {
 		const tmdbFallback = await fetchTmdbForMood(focusGenres, limit - recommendations.length, moodConfig.label);
 		tmdbFallback.forEach((item) => {
@@ -402,7 +500,7 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 		mood: { key: normalizedMood, label: moodConfig.label },
 		meta: {
 			focusGenres,
-			source: tmdbUsed ? (recommendations.length ? 'local-db+tmdb' : 'tmdb') : aiSource,
+			source: tmdbUsed ? 'hybrid-local+tmdb' : aiSource,
 			totalMoviesScored: scoredEntries.length,
 			refreshNonce: refreshNonce ?? null,
 			aiModule: aiSource,
@@ -412,7 +510,8 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 	};
 };
 
-async function fetchTmdbForMood(focusGenres, limit, moodLabel) {
+async function fetchTmdbForMood(focusGenres, limit, moodLabel, options = {}) {
+	const { raw = false } = options;
 	if (!tmdbClient) return [];
 	const genreIds = Array.from(
 		new Set(
@@ -429,7 +528,9 @@ async function fetchTmdbForMood(focusGenres, limit, moodLabel) {
 	try {
 		const response = await tmdbClient.get(endpoint, { params });
 		const results = Array.isArray(response.data?.results) ? response.data.results : [];
-		return results.slice(0, limit).map((movie, index) =>
+		const sliced = results.slice(0, limit);
+		if (raw) return sliced;
+		return sliced.map((movie, index) =>
 			serializeTmdbMovie(movie, moodLabel, useDiscover ? 0.6 - index * 0.02 : 0.4 - index * 0.01)
 		);
 	} catch (err) {

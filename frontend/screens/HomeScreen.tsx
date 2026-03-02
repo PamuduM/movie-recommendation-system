@@ -40,6 +40,8 @@ type MoodMovie = MoodRecommendation & {
   title: string;
   poster_path?: string | null;
   release_date?: string | null;
+  rating?: number | null;
+  ratingCount?: number;
 };
 
 type MoodPreset = {
@@ -52,6 +54,17 @@ type MoodPreset = {
 };
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+const resolvePosterUri = (uri?: string | null) => {
+  if (!uri) return null;
+  if (/^https?:\/\//i.test(uri)) {
+    return uri;
+  }
+  if (uri.startsWith('/')) {
+    return `${TMDB_IMAGE_BASE}${uri}`;
+  }
+  return `${TMDB_IMAGE_BASE}/${uri}`;
+};
 
 const MOOD_PRESETS: MoodPreset[] = [
   {
@@ -180,8 +193,9 @@ const detectMoodFromText = (text: string) => {
 
 const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
   const [failed, setFailed] = useState(false);
+  const resolvedUri = useMemo(() => resolvePosterUri(uri), [uri]);
 
-  if (!uri || failed) {
+  if (!resolvedUri || failed) {
     return (
       <View style={[styles.poster, styles.posterFallback]}>
         <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
@@ -189,13 +203,7 @@ const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
     );
   }
 
-  return (
-    <Image
-      source={{ uri: `${TMDB_IMAGE_BASE}${uri}` }}
-      style={styles.poster}
-      onError={() => setFailed(true)}
-    />
-  );
+  return <Image source={{ uri: resolvedUri }} style={styles.poster} onError={() => setFailed(true)} />;
 };
 
 const HomeScreen = () => {
@@ -409,6 +417,11 @@ const HomeScreen = () => {
           {item.moodTag ? `${item.moodTag}` : null}
           {item.moodTag && typeof item.moodScore === 'number' ? ' · ' : ''}
           {typeof item.moodScore === 'number' ? `Match ${(item.moodScore * 100).toFixed(0)}%` : ''}
+        </Text>
+      ) : null}
+      {typeof item.rating === 'number' ? (
+        <Text style={[styles.recoMeta, { color: colors.tint }]} numberOfLines={1}>
+          ★ {item.rating.toFixed(1)} {item.ratingCount ? `· ${item.ratingCount} reviews` : ''}
         </Text>
       ) : null}
       {item.release_date ? (
