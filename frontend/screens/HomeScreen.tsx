@@ -58,9 +58,17 @@ const MOOD_PRESETS: MoodPreset[] = [
     id: 'happy',
     label: 'Happy',
     description: 'Feel-good adventures',
-    genres: ['Comedy', 'Adventure'],
+    genres: ['Comedy', 'Adventure', 'Animation'],
     accent: '#f6a326',
-    keywords: ['happy', 'joy', 'celebrate', 'excited', 'optimistic'],
+    keywords: ['happy', 'joy', 'celebrate', 'ecstatic', 'optimistic'],
+  },
+  {
+    id: 'excited',
+    label: 'Excited',
+    description: 'High-energy crowd pleasers',
+    genres: ['Action', 'Adventure', 'Music'],
+    accent: '#ff4db8',
+    keywords: ['excited', 'pumped', 'thrilled', 'energetic', 'party'],
   },
   {
     id: 'calm',
@@ -69,6 +77,14 @@ const MOOD_PRESETS: MoodPreset[] = [
     genres: ['Drama', 'Slice of life'],
     accent: '#4ab5cb',
     keywords: ['calm', 'peaceful', 'relaxed', 'chill', 'serene'],
+  },
+  {
+    id: 'romantic',
+    label: 'Romantic',
+    description: 'Heartfelt connections',
+    genres: ['Romance', 'Drama'],
+    accent: '#ff6f61',
+    keywords: ['romantic', 'love', 'date', 'affection', 'caring'],
   },
   {
     id: 'sad',
@@ -82,9 +98,17 @@ const MOOD_PRESETS: MoodPreset[] = [
     id: 'stressed',
     label: 'Stressed',
     description: 'Light escape picks',
-    genres: ['Animation', 'Family'],
+    genres: ['Animation', 'Family', 'Comedy'],
     accent: '#ef5c4d',
     keywords: ['stressed', 'overwhelmed', 'tired', 'burned out', 'drained'],
+  },
+  {
+    id: 'angry',
+    label: 'Angry',
+    description: 'Cathartic releases',
+    genres: ['Thriller', 'Crime', 'Action'],
+    accent: '#d7263d',
+    keywords: ['angry', 'mad', 'furious', 'frustrated', 'rage'],
   },
   {
     id: 'bold',
@@ -97,6 +121,35 @@ const MOOD_PRESETS: MoodPreset[] = [
 ];
 
 const DEFAULT_MOOD_ID = MOOD_PRESETS[0].id;
+
+const MOOD_SYNONYM_TABLE: Record<string, string[]> = {
+  happy: ['happy', 'joyful', 'glad', 'optimistic', 'sunny', 'cheerful', 'delighted'],
+  excited: ['excited', 'pumped', 'thrilled', 'energetic', 'wired', 'party', 'amped'],
+  calm: ['calm', 'peaceful', 'relaxed', 'serene', 'tranquil', 'zen', 'mellow'],
+  romantic: ['romantic', 'love', 'lovey', 'affection', 'date', 'crush', 'heart'],
+  sad: ['sad', 'blue', 'down', 'lonely', 'melancholy', 'heartbroken'],
+  stressed: ['stressed', 'overwhelmed', 'anxious', 'drained', 'burned', 'frazzled'],
+  angry: ['angry', 'mad', 'furious', 'rage', 'annoyed', 'irritated'],
+  bold: ['bold', 'fearless', 'brave', 'daring', 'adrenaline'],
+};
+
+const applyAlphaToHex = (hex: string, alpha = 0.18) => {
+  if (!hex) return hex;
+  const normalized = hex.startsWith('#') ? hex.slice(1) : hex;
+  if (normalized.length !== 6) return hex;
+  const boundedAlpha = Math.min(Math.max(alpha, 0), 1);
+  const alphaHex = Math.round(boundedAlpha * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${normalized}${alphaHex}`;
+};
+
+const cleanMoodText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const normalizeRecommendationResponse = (payload: MoodRecommendationResponse): MoodMovie[] => {
   if (!payload) return [];
@@ -116,22 +169,13 @@ const normalizeRecommendationResponse = (payload: MoodRecommendationResponse): M
 };
 
 const detectMoodFromText = (text: string) => {
-  const normalized = text.trim().toLowerCase();
+  const normalized = cleanMoodText(text);
   if (!normalized) return null;
-  const preset = MOOD_PRESETS.find(({ keywords }) =>
-    keywords.some((keyword) => normalized.includes(keyword))
+  return (
+    Object.entries(MOOD_SYNONYM_TABLE).find(([, synonyms]) =>
+      synonyms.some((keyword) => normalized.includes(keyword))
+    )?.[0] ?? null
   );
-  if (preset) return preset.id;
-  if (normalized.includes('angry') || normalized.includes('frustrated')) {
-    return 'stressed';
-  }
-  if (normalized.includes('grateful')) {
-    return 'happy';
-  }
-  if (normalized.includes('nostalgic') || normalized.includes('reflective')) {
-    return 'calm';
-  }
-  return null;
 };
 
 const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
@@ -175,6 +219,8 @@ const HomeScreen = () => {
   const [recommendedMovies, setRecommendedMovies] = useState<MoodMovie[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(true);
   const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [moodLimit, setMoodLimit] = useState(12);
+  const [moodNonce, setMoodNonce] = useState(() => Date.now());
   const requestIdRef = useRef(0); // Prevents stale recommendation responses from winning race conditions.
 
   const loadPage = async (nextPage: number, replace = false) => {
@@ -231,9 +277,10 @@ const HomeScreen = () => {
       try {
         const payload = {
           mood: moodId,
-          limit: 12,
+          limit: moodLimit,
           textSample: origin === 'text' ? lastAnalyzedText || textMood : undefined,
           fallbackGenres: resolvedMoodDetails?.genres,
+          refreshNonce: moodNonce,
         };
         const response = await fetchMoodRecommendations(payload);
         if (requestId !== requestIdRef.current) return;
@@ -249,7 +296,7 @@ const HomeScreen = () => {
         }
       }
     },
-    [lastAnalyzedText, textMood, resolvedMoodDetails]
+    [lastAnalyzedText, textMood, resolvedMoodDetails, moodLimit, moodNonce]
   );
 
   useEffect(() => {
@@ -289,6 +336,7 @@ const HomeScreen = () => {
     setDetectedMood(null);
     setAnalysisMessage(null);
     setLastAnalyzedText('');
+    setMoodNonce(Date.now());
   };
 
   const handleAnalyzeText = () => {
@@ -309,10 +357,23 @@ const HomeScreen = () => {
       setAnalysisMessage(
         preset ? `Detected a ${preset.label.toLowerCase()} mood from your text.` : 'Mood detected.'
       );
+      setMoodNonce(Date.now());
     } else {
       setAnalysisMessage('Could not map that text to a mood. Try a preset.');
       setDetectedMood(null);
     }
+  };
+
+  const handleMoodRefresh = () => {
+    setMoodNonce(Date.now());
+  };
+
+  const handleToggleMorePicks = () => {
+    setMoodLimit((prev) => {
+      const next = prev >= 20 ? 12 : 24;
+      return next;
+    });
+    setMoodNonce(Date.now());
   };
 
   const handlePullRefresh = async () => {
@@ -387,21 +448,29 @@ const HomeScreen = () => {
           <View style={styles.moodGrid}>
             {MOOD_PRESETS.map((preset) => {
               const isActive = preset.id === resolvedMood;
+              const chipBackground = isActive
+                ? preset.accent
+                : applyAlphaToHex(
+                    preset.accent,
+                    colorScheme === 'dark' ? 0.32 : 0.16
+                  );
+              const chipLabelColor = isActive ? '#ffffff' : colors.text;
+              const chipDescriptionColor = isActive ? 'rgba(255,255,255,0.85)' : mutedText;
               return (
                 <TouchableOpacity
                   key={preset.id}
                   style={[
                     styles.moodChip,
                     {
-                      borderColor: isActive ? preset.accent : surfaceBorder,
-                      backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
+                      borderColor: preset.accent,
+                      backgroundColor: chipBackground,
                     },
                   ]}
                   onPress={() => handleMoodSelect(preset.id)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipLabel, { color: colors.text }]}>{preset.label}</Text>
-                  <Text style={[styles.chipGenres, { color: mutedText }]} numberOfLines={1}>
+                  <Text style={[styles.chipLabel, { color: chipLabelColor }]}>{preset.label}</Text>
+                  <Text style={[styles.chipGenres, { color: chipDescriptionColor }]} numberOfLines={1}>
                     {preset.description}
                   </Text>
                 </TouchableOpacity>
@@ -435,22 +504,29 @@ const HomeScreen = () => {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>AI Mood Picks</Text>
             <Text style={[styles.sectionSubtitle, { color: mutedText }]}>Based on {resolvedMoodDetails?.label ?? 'your mood'} mood.</Text>
           </View>
-          <TouchableOpacity
-            onPress={() => resolvedMood && loadMoodRecommendations(resolvedMood, selectedMood ? 'preset' : 'text')}
-            disabled={!resolvedMood || recommendationsLoading}
-          >
-            <Text
-              style={[
-                styles.linkButton,
-                {
-                  color: colors.tint,
-                  opacity: !resolvedMood || recommendationsLoading ? 0.5 : 1,
-                },
-              ]}
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => resolvedMood && handleMoodRefresh()}
+              disabled={!resolvedMood || recommendationsLoading}
             >
-              Refresh
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.linkButton,
+                  {
+                    color: colors.tint,
+                    opacity: !resolvedMood || recommendationsLoading ? 0.5 : 1,
+                  },
+                ]}
+              >
+                Refresh
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleToggleMorePicks}>
+              <Text style={[styles.linkButton, { color: colors.tint }]}>
+                {moodLimit > 15 ? 'Fewer' : 'More'} picks
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.recommendationsWrapper}>
@@ -598,6 +674,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerLeft: { flex: 1, paddingRight: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', columnGap: 12 },
   linkButton: { fontSize: 13, fontWeight: '600' },
   recommendationsWrapper: { minHeight: 240, paddingBottom: 24, paddingHorizontal: 16 },
   recommendationsList: { paddingHorizontal: 16 },

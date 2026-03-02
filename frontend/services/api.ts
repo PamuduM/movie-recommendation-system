@@ -155,6 +155,7 @@ export type MoodRecommendationRequest = {
   textSample?: string;
   limit?: number;
   fallbackGenres?: string[];
+  refreshNonce?: number;
 };
 
 export type MoodRecommendation = {
