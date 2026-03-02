@@ -87,9 +87,28 @@ io.on('connection', (socket) => {
   });
 });
 
+const syncDatabase = async () => {
+  const strategy = (process.env.DB_SYNC_STRATEGY || '').trim().toLowerCase();
+  const shouldAlter = strategy === 'alter';
+  const dialect = sequelize.getDialect();
+  const syncOptions = shouldAlter ? { alter: true } : undefined;
+
+  if (shouldAlter && dialect === 'sqlite') {
+    console.warn('SQLite alter sync detected. Temporarily disabling foreign key checks.');
+    await sequelize.query('PRAGMA foreign_keys = OFF;');
+  }
+
+  try {
+    await sequelize.sync(syncOptions);
+  } finally {
+    if (shouldAlter && dialect === 'sqlite') {
+      await sequelize.query('PRAGMA foreign_keys = ON;');
+    }
+  }
+};
+
 // Sync DB and start server
-sequelize
-  .sync({ alter: true })
+syncDatabase()
   .then(() => {
     const PORT = process.env.PORT || 5000;
     const HOST = process.env.HOST || '0.0.0.0';

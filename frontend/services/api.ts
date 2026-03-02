@@ -150,6 +150,35 @@ export const fetchRecommendations = async (userId: number) => {
   return response.data;
 };
 
+export type MoodRecommendationRequest = {
+  mood: string;
+  textSample?: string;
+  limit?: number;
+  fallbackGenres?: string[];
+};
+
+export type MoodRecommendation = {
+  id: number | string;
+  title: string;
+  poster_path?: string | null;
+  release_date?: string | null;
+  overview?: string | null;
+  moodScore?: number;
+  moodTag?: string | null;
+  genres?: string[];
+};
+
+export type MoodRecommendationResponse =
+  | { recommendations?: MoodRecommendation[]; movies?: MoodRecommendation[]; results?: MoodRecommendation[] }
+  | MoodRecommendation[]
+  | null
+  | undefined;
+
+export const fetchMoodRecommendations = async (payload: MoodRecommendationRequest) => {
+  const response = await api.post('/recommendations/mood', payload);
+  return response.data as MoodRecommendationResponse;
+};
+
 type SearchMoviesOptions = {
   genre?: string;
   genres?: string[];
