@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const http = require('http');
 const { Server } = require('socket.io');
 const sequelize = require('./config/database');
+require('./models');
 require('dotenv').config();
 
 const app = express();

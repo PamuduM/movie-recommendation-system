@@ -240,7 +240,9 @@ const HomeScreen = () => {
         setRecommendedMovies(normalizeRecommendationResponse(response));
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        setRecommendationsError('Unable to load recommendations for this mood.');
+        const reason = err instanceof Error ? err.message : 'Unknown error';
+        console.warn('[MoodRecommendations] request failed:', reason);
+        setRecommendationsError(`Unable to load recommendations (${reason}).`);
       } finally {
         if (requestId === requestIdRef.current) {
           setRecommendationsLoading(false);
@@ -327,8 +329,9 @@ const HomeScreen = () => {
     }
   };
 
-  const renderRecommendation = ({ item }: { item: MoodMovie }) => (
+  const renderRecommendationCard = (item: MoodMovie) => (
     <View
+      key={`mood-${item.id}`}
       style={[styles.recoCard, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#ffffff' }]}
     >
       <Poster uri={item.poster_path} title={item.title} />
@@ -456,16 +459,15 @@ const HomeScreen = () => {
           ) : recommendationsError ? (
             <Text style={[styles.emptyText, { color: mutedText }]}>{recommendationsError}</Text>
           ) : recommendedMovies.length === 0 ? (
-            <Text style={[styles.emptyText, { color: mutedText }]}>Select or describe a mood to see personalized ideas.</Text>
+            <Text style={[styles.emptyText, { color: mutedText }]}>Select or describe a mood, then pull down to refresh once the server is running.</Text>
           ) : (
-            <FlatList
-              data={recommendedMovies}
+            <ScrollView
               horizontal
-              keyExtractor={(item) => String(item.id)}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.recommendationsList}
-              renderItem={renderRecommendation}
-            />
+            >
+              {recommendedMovies.map((item) => renderRecommendationCard(item))}
+            </ScrollView>
           )}
         </View>
 

@@ -12,4 +12,18 @@ router.get('/user/:userId', auth, async (req, res) => {
   }
 });
 
+router.post('/mood', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const data = await aiRecommendationService.getMoodRecommendations(payload);
+    res.json({
+      mood: data.mood,
+      recommendations: data.recommendations,
+      meta: data.meta,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
