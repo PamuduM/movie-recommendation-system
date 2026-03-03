@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
+import { Appearance } from 'react-native';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -8,7 +9,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => Appearance.getColorScheme() === 'dark');
   const toggleTheme = () => setDarkMode((prev) => !prev);
   return (
     <ThemeContext.Provider value={{ darkMode, toggleTheme }}>

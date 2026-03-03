@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
 import { useEffect } from 'react';
 
 export const unstable_settings = {
@@ -49,14 +50,22 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <RootNavigation />
+    </AppThemeProvider>
+  );
+}
+
+function RootNavigation() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <NavigationThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <AuthGate />
-        <StatusBar style="auto" />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </AuthProvider>
-    </ThemeProvider>
+    </NavigationThemeProvider>
   );
 }

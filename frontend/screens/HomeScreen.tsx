@@ -12,9 +12,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   fetchMoodRecommendations,
   fetchTmdbTrendingMovies,
@@ -207,6 +209,7 @@ const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
 };
 
 const HomeScreen = () => {
+  const { darkMode, toggleTheme } = useTheme();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const cardBackground = colorScheme === 'dark' ? '#1f1f1f' : '#f5f7fa';
@@ -446,7 +449,27 @@ const HomeScreen = () => {
         }
       >
         <View style={styles.brandWrap}>
-          <Text style={[styles.brandTitle, { color: colors.text }]}>FlickX</Text>
+          <View style={styles.brandHeader}>
+            <Text style={[styles.brandTitle, { color: colors.text }]}>FlickX</Text>
+            <TouchableOpacity
+              style={[
+                styles.themeToggle,
+                {
+                  borderColor: surfaceBorder,
+                  backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
+                },
+              ]}
+              onPress={toggleTheme}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle dark mode"
+              activeOpacity={0.85}
+            >
+              <Ionicons name={darkMode ? 'moon' : 'sunny'} size={16} color={colors.tint} />
+              <Text style={[styles.themeToggleText, { color: colors.text }]}>
+                {darkMode ? 'Dark on' : 'Dark off'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.heroText, { color: mutedText }]}>Movies that match your mood.</Text>
         </View>
 
@@ -632,8 +655,23 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingBottom: 32 },
   brandWrap: { paddingTop: 16, paddingHorizontal: 20, paddingBottom: 12 },
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   brandTitle: { fontSize: 28, fontWeight: '800' },
   heroText: { marginTop: 4, fontSize: 14 },
+  themeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  themeToggleText: { fontSize: 12, fontWeight: '600', marginLeft: 6 },
   center: { alignItems: 'center', justifyContent: 'center', minHeight: 140 },
   listContent: { paddingHorizontal: 16, paddingBottom: 16 },
   card: { width: 140, marginHorizontal: 8 },
