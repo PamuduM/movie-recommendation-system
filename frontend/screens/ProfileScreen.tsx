@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Button, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -27,9 +28,15 @@ type FollowUser = {
 type MovieSearchResult = {
   id: number | string;
   title?: string | null;
+  name?: string | null;
   releaseDate?: string | null;
   release_date?: string | null;
   overview?: string | null;
+  description?: string | null;
+  poster?: string | null;
+  poster_path?: string | null;
+  genres?: Array<string | number>;
+  genre_ids?: Array<string | number>;
 };
 
 import * as ImagePicker from 'expo-image-picker';
@@ -223,6 +230,13 @@ const ProfileScreen = () => {
     loadWatchlist();
   }, [loadWatchlist]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadWatchlist();
+      return undefined;
+    }, [loadWatchlist])
+  );
+
   const handleWatchlistSearch = useCallback(async () => {
     const query = watchlistSearch.trim();
     if (query.length < 2) {
@@ -242,12 +256,23 @@ const ProfileScreen = () => {
   }, [watchlistSearch]);
 
   const handleAddToWatchlist = useCallback(
-    async (movieId: number) => {
+    async (movieId: number, movie?: MovieSearchResult) => {
       if (!movieId || watchlistMovieIds.has(movieId)) return;
       setWatchlistError(null);
       setWatchlistAddingId(movieId);
       try {
-        await apiAddToWatchlist(movieId);
+        await apiAddToWatchlist(movieId, movie ? {
+          title: movie.title ?? movie.name ?? null,
+          name: movie.name ?? null,
+          overview: movie.overview ?? movie.description ?? null,
+          description: movie.description ?? null,
+          poster: movie.poster ?? null,
+          poster_path: movie.poster_path ?? null,
+          releaseDate: movie.releaseDate ?? null,
+          release_date: movie.release_date ?? null,
+          genres: movie.genres,
+          genre_ids: movie.genre_ids,
+        } : undefined);
         await loadWatchlist();
         setMessage('Movie added to watchlist');
       } catch (e: any) {
@@ -428,7 +453,7 @@ const ProfileScreen = () => {
                         {releaseLabel ? <Text style={styles.watchlistMovieMeta}>{releaseLabel}</Text> : null}
                       </View>
                       <TouchableOpacity
-                        onPress={() => (hasValidId ? handleAddToWatchlist(movieId) : undefined)}
+                        onPress={() => (hasValidId ? handleAddToWatchlist(movieId, result) : undefined)}
                         disabled={disableButton}
                         style={[styles.watchlistAddBtn, disableButton && styles.watchlistAddBtnDisabled]}
                       >

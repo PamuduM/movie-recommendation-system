@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
@@ -15,15 +14,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchWatchlist, removeFromWatchlist, type WatchlistEntry } from '@/services/api';
-
-const resolvePosterUri = (uri?: string | null) => {
-  if (!uri) return null;
-  if (/^https?:\/\//i.test(uri)) return uri;
-  if (uri.startsWith('/')) {
-    return `https://image.tmdb.org/t/p/w500${uri}`;
-  }
-  return uri;
-};
+import { useFocusEffect } from '@react-navigation/native';
 
 const WatchlistScreen = () => {
   const { user } = useAuth();
@@ -66,6 +57,13 @@ const WatchlistScreen = () => {
     };
   }, [fetchEntries]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchEntries();
+      return undefined;
+    }, [fetchEntries])
+  );
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchEntries();
@@ -89,33 +87,11 @@ const WatchlistScreen = () => {
     []
   );
 
-  const renderPoster = useCallback((entry: WatchlistEntry) => {
-    const posterUri = resolvePosterUri(entry.Movie?.poster ?? null);
-    if (!posterUri) {
-      return (
-        <View style={[styles.posterThumb, styles.posterThumbFallback]}>
-          <Text style={styles.posterThumbText}>
-            {(entry.Movie?.title ?? '??').slice(0, 2).toUpperCase()}
-          </Text>
-        </View>
-      );
-    }
-    return <Image source={{ uri: posterUri }} style={styles.posterThumb} />;
-  }, []);
-
   const renderItem = ({ item }: { item: WatchlistEntry }) => (
     <View style={[styles.row, { borderColor: surfaceBorder }]}>
-      {renderPoster(item)}
-      <View style={styles.rowInfo}>
-        <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
-          {item.Movie?.title ?? `Movie #${item.movieId}`}
-        </Text>
-        {item.Movie?.releaseDate ? (
-          <Text style={[styles.rowMeta, { color: colors.icon }]}>
-            {new Date(item.Movie.releaseDate).getFullYear()}
-          </Text>
-        ) : null}
-      </View>
+      <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+        {item.Movie?.title ?? `Movie #${item.movieId}`}
+      </Text>
       <TouchableOpacity
         style={styles.removeBtn}
         onPress={() => handleRemove(item.id)}
@@ -179,12 +155,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderBottomWidth: 1,
   },
-  posterThumb: { width: 64, height: 96, borderRadius: 12, backgroundColor: '#1f1f1f' },
-  posterThumbFallback: { alignItems: 'center', justifyContent: 'center' },
-  posterThumbText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  rowInfo: { flex: 1, marginLeft: 12 },
-  rowTitle: { fontSize: 15, fontWeight: '600' },
-  rowMeta: { fontSize: 12, marginTop: 4 },
+  rowTitle: { flex: 1, fontSize: 15, fontWeight: '600' },
   removeBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,

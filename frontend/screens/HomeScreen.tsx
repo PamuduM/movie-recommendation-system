@@ -248,7 +248,6 @@ const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist }: Post
         <TouchableOpacity
           style={[
             styles.watchlistToggle,
-            watchlisted && styles.watchlistToggleActive,
             toggleBusy && styles.watchlistToggleDisabled,
           ]}
           onPress={onToggleWatchlist ?? undefined}
@@ -256,8 +255,8 @@ const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist }: Post
           disabled={toggleBusy}
         >
           <Ionicons
-            name={watchlisted ? 'heart' : 'heart-outline'}
-            size={18}
+            name="heart-outline"
+            size={20}
             color={watchlisted ? '#0d6efd' : '#ffffff'}
           />
         </TouchableOpacity>
@@ -503,13 +502,30 @@ const HomeScreen = () => {
       if (watchlistBusyId === movieId) return;
       setWatchlistBusyId(movieId);
       try {
-        const existing = watchlistEntries.find((entry) => entry.movieId === movieId);
+        const existing = watchlistEntries.find((entry) => Number(entry.movieId) === movieId);
         if (existing) {
           await removeFromWatchlist(existing.id);
+          setWatchlistEntries((prev) => prev.filter((entry) => entry.id !== existing.id));
+          setWatchlistIds((prev) => {
+            const next = new Set(prev);
+            next.delete(movieId);
+            return next;
+          });
         } else {
-          await addToWatchlist(movieId, metadata);
+          const created = await addToWatchlist(movieId, metadata);
+          setWatchlistEntries((prev) => {
+            if (prev.some((entry) => entry.id === created.id || Number(entry.movieId) === movieId)) {
+              return prev;
+            }
+            return [...prev, created];
+          });
+          setWatchlistIds((prev) => {
+            const next = new Set(prev);
+            next.add(movieId);
+            return next;
+          });
         }
-        await loadWatchlist();
+        loadWatchlist().catch(() => undefined);
       } catch (err: any) {
         const message = err?.response?.data?.error ?? err?.message ?? 'Unable to update watchlist';
         Alert.alert('Watchlist', message);
@@ -833,14 +849,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#000000aa',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  watchlistToggleActive: { backgroundColor: '#0d6efd' },
   watchlistToggleDisabled: { opacity: 0.6 },
   movieTitle: { marginTop: 10, fontSize: 14, fontWeight: '600' },
   movieMeta: { marginTop: 4, fontSize: 12 },

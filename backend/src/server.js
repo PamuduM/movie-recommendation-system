@@ -94,6 +94,11 @@ const syncDatabase = async () => {
   const dialect = sequelize.getDialect();
   const syncOptions = shouldAlter ? { alter: true } : undefined;
 
+  if (dialect === 'sqlite') {
+    await sequelize.query('PRAGMA journal_mode = WAL;');
+    await sequelize.query('PRAGMA busy_timeout = 10000;');
+  }
+
   if (shouldAlter && dialect === 'sqlite') {
     console.warn('SQLite alter sync detected. Temporarily disabling foreign key checks.');
     await sequelize.query('PRAGMA foreign_keys = OFF;');

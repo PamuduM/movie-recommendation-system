@@ -59,15 +59,10 @@ exports.addToWatchlist = async (req, res) => {
       return res.status(400).json({ error: 'Invalid movieId' });
     }
 
-    let movie = await Movie.findByPk(numericMovieId);
-    if (!movie && req.body.movie) {
-      const payload = buildMoviePayload(numericMovieId, req.body.movie);
-      movie = await Movie.create(payload);
-    }
-
-    if (!movie) {
-      return res.status(400).json({ error: 'Movie not found. Provide metadata to create it automatically.' });
-    }
+    const [movie] = await Movie.findOrCreate({
+      where: { id: numericMovieId },
+      defaults: buildMoviePayload(numericMovieId, req.body.movie || {}),
+    });
 
     const [entry, created] = await Watchlist.findOrCreate({
       where: { userId: req.user.id, movieId: numericMovieId },
