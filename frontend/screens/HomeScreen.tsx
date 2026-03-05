@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   RefreshControl,
@@ -17,11 +18,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
+  addToWatchlist,
   fetchMoodRecommendations,
   fetchTmdbTrendingMovies,
+  fetchWatchlist,
+  removeFromWatchlist,
   type MoodRecommendation,
   type MoodRecommendationResponse,
+  type WatchlistEntry,
+  type WatchlistMoviePayload,
 } from '@/services/api';
 
 type TmdbMovie = {
@@ -67,6 +74,28 @@ const resolvePosterUri = (uri?: string | null) => {
   }
   return `${TMDB_IMAGE_BASE}/${uri}`;
 };
+
+const resolveNumericId = (value: number | string | null | undefined) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const toWatchlistPayloadFromMoodMovie = (movie: MoodMovie) => ({
+  title: movie.title,
+  overview: (movie as { overview?: string; description?: string }).overview ??
+    (movie as { description?: string }).description ??
+    null,
+  poster_path: movie.poster_path ?? (movie as { poster?: string }).poster ?? null,
+  release_date:
+    movie.release_date ?? (movie as { releaseDate?: string | null }).releaseDate ?? null,
+  genres: Array.isArray(movie.genres) ? movie.genres : undefined,
+});
+
+const toWatchlistPayloadFromTmdbMovie = (movie: TmdbMovie) => ({
+  title: movie.title,
+  poster_path: movie.poster_path ?? null,
+  release_date: movie.release_date ?? null,
+});
 
 const MOOD_PRESETS: MoodPreset[] = [
   {
@@ -193,22 +222,52 @@ const detectMoodFromText = (text: string) => {
   );
 };
 
-const Poster = ({ uri, title }: { uri?: string | null; title: string }) => {
+type PosterProps = {
+  uri?: string | null;
+  title: string;
+  watchlisted?: boolean;
+  toggleBusy?: boolean;
+  onToggleWatchlist?: (() => void) | null;
+};
+
+const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist }: PosterProps) => {
   const [failed, setFailed] = useState(false);
   const resolvedUri = useMemo(() => resolvePosterUri(uri), [uri]);
+  const showToggle = typeof onToggleWatchlist === 'function';
 
-  if (!resolvedUri || failed) {
-    return (
-      <View style={[styles.poster, styles.posterFallback]}>
-        <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
-      </View>
-    );
-  }
-
-  return <Image source={{ uri: resolvedUri }} style={styles.poster} onError={() => setFailed(true)} />;
+  return (
+    <View style={styles.posterWrapper}>
+      {resolvedUri && !failed ? (
+        <Image source={{ uri: resolvedUri }} style={styles.poster} onError={() => setFailed(true)} />
+      ) : (
+        <View style={[styles.poster, styles.posterFallback]}>
+          <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
+        </View>
+      )}
+      {showToggle ? (
+        <TouchableOpacity
+          style={[
+            styles.watchlistToggle,
+            watchlisted && styles.watchlistToggleActive,
+            toggleBusy && styles.watchlistToggleDisabled,
+          ]}
+          onPress={onToggleWatchlist ?? undefined}
+          activeOpacity={0.85}
+          disabled={toggleBusy}
+        >
+          <Ionicons
+            name={watchlisted ? 'heart' : 'heart-outline'}
+            size={18}
+            color={watchlisted ? '#0d6efd' : '#ffffff'}
+          />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
 };
 
 const HomeScreen = () => {
+  const { user } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -233,6 +292,10 @@ const HomeScreen = () => {
   const [moodLimit, setMoodLimit] = useState(12);
   const [moodNonce, setMoodNonce] = useState(() => Date.now());
   const requestIdRef = useRef(0); // Prevents stale recommendation responses from winning race conditions.
+  const [watchlistEntries, setWatchlistEntries] = useState<WatchlistEntry[]>([]);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+  const [watchlistBusyId, setWatchlistBusyId] = useState<number | null>(null);
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
 
   const loadPage = async (nextPage: number, replace = false) => {
     const data: TmdbResponse = await fetchTmdbTrendingMovies('week', nextPage);
@@ -272,6 +335,34 @@ const HomeScreen = () => {
       mounted = false;
     };
   }, []);
+
+  const updateWatchlistState = useCallback((entries: WatchlistEntry[]) => {
+    setWatchlistEntries(entries);
+    const ids = entries
+      .map((entry) => Number(entry.movieId))
+      .filter((id) => Number.isFinite(id)) as number[];
+    setWatchlistIds(new Set(ids));
+  }, []);
+
+  const loadWatchlist = useCallback(async () => {
+    if (!user?.id) {
+      updateWatchlistState([]);
+      setWatchlistError(null);
+      return;
+    }
+    try {
+      const entries = await fetchWatchlist(user.id);
+      updateWatchlistState(Array.isArray(entries) ? entries : []);
+      setWatchlistError(null);
+    } catch (err: any) {
+      const message = err?.response?.data?.error ?? err?.message ?? 'Failed to load watchlist';
+      setWatchlistError(message);
+    }
+  }, [updateWatchlistState, user?.id]);
+
+  useEffect(() => {
+    loadWatchlist();
+  }, [loadWatchlist]);
 
   const resolvedMood = selectedMood ?? detectedMood ?? null;
   const resolvedMoodDetails = useMemo(
@@ -394,6 +485,7 @@ const HomeScreen = () => {
       if (resolvedMood) {
         await loadMoodRecommendations(resolvedMood, selectedMood ? 'preset' : 'text');
       }
+      await loadWatchlist();
     } catch (err) {
       // errors handled inside individual loaders
     } finally {
@@ -401,39 +493,80 @@ const HomeScreen = () => {
     }
   };
 
-  const renderRecommendationCard = (item: MoodMovie) => (
-    <View
-      key={`mood-${item.id}`}
-      style={[styles.recoCard, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#ffffff' }]}
-    >
-      <Poster uri={item.poster_path} title={item.title} />
-      <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
-        {item.title}
-      </Text>
-      {item.genres && item.genres.length > 0 ? (
-        <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
-          {item.genres.slice(0, 2).join(' • ')}
-        </Text>
-      ) : null}
-      {item.moodTag || typeof item.moodScore === 'number' ? (
-        <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
-          {item.moodTag ? `${item.moodTag}` : null}
-          {item.moodTag && typeof item.moodScore === 'number' ? ' · ' : ''}
-          {typeof item.moodScore === 'number' ? `Match ${(item.moodScore * 100).toFixed(0)}%` : ''}
-        </Text>
-      ) : null}
-      {typeof item.rating === 'number' ? (
-        <Text style={[styles.recoMeta, { color: colors.tint }]} numberOfLines={1}>
-          ★ {item.rating.toFixed(1)} {item.ratingCount ? `· ${item.ratingCount} reviews` : ''}
-        </Text>
-      ) : null}
-      {item.release_date ? (
-        <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
-          {new Date(item.release_date).getFullYear()}
-        </Text>
-      ) : null}
-    </View>
+  const handleToggleWatchlist = useCallback(
+    async (movieId: number | null, metadata?: WatchlistMoviePayload) => {
+      if (!movieId || !Number.isFinite(movieId)) return;
+      if (!user?.id) {
+        Alert.alert('Sign in required', 'Log in to manage your watchlist.');
+        return;
+      }
+      if (watchlistBusyId === movieId) return;
+      setWatchlistBusyId(movieId);
+      try {
+        const existing = watchlistEntries.find((entry) => entry.movieId === movieId);
+        if (existing) {
+          await removeFromWatchlist(existing.id);
+        } else {
+          await addToWatchlist(movieId, metadata);
+        }
+        await loadWatchlist();
+      } catch (err: any) {
+        const message = err?.response?.data?.error ?? err?.message ?? 'Unable to update watchlist';
+        Alert.alert('Watchlist', message);
+      } finally {
+        setWatchlistBusyId(null);
+      }
+    },
+    [user?.id, watchlistBusyId, watchlistEntries, loadWatchlist]
   );
+
+  const renderRecommendationCard = (item: MoodMovie) => {
+    const numericId = resolveNumericId(item.id as number | string | null | undefined);
+    const isSaved = numericId ? watchlistIds.has(numericId) : false;
+    return (
+      <View
+        key={`mood-${item.id}`}
+        style={[styles.recoCard, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#ffffff' }]}
+      >
+        <Poster
+          uri={item.poster_path}
+          title={item.title}
+          watchlisted={isSaved}
+          toggleBusy={numericId !== null && watchlistBusyId === numericId}
+          onToggleWatchlist={
+            numericId !== null
+              ? () => handleToggleWatchlist(numericId, toWatchlistPayloadFromMoodMovie(item))
+              : null
+          }
+        />
+        <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
+          {item.title}
+        </Text>
+        {item.genres && item.genres.length > 0 ? (
+          <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
+            {item.genres.slice(0, 2).join(' • ')}
+          </Text>
+        ) : null}
+        {item.moodTag || typeof item.moodScore === 'number' ? (
+          <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
+            {item.moodTag ? `${item.moodTag}` : null}
+            {item.moodTag && typeof item.moodScore === 'number' ? ' · ' : ''}
+            {typeof item.moodScore === 'number' ? `Match ${(item.moodScore * 100).toFixed(0)}%` : ''}
+          </Text>
+        ) : null}
+        {typeof item.rating === 'number' ? (
+          <Text style={[styles.recoMeta, { color: colors.tint }]} numberOfLines={1}>
+            ★ {item.rating.toFixed(1)} {item.ratingCount ? `· ${item.ratingCount} reviews` : ''}
+          </Text>
+        ) : null}
+        {item.release_date ? (
+          <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
+            {new Date(item.release_date).getFullYear()}
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -566,6 +699,9 @@ const HomeScreen = () => {
         </View>
 
         <View style={styles.recommendationsWrapper}>
+          {watchlistError ? (
+            <Text style={[styles.watchlistNotice, { color: '#d7263d' }]}>{watchlistError}</Text>
+          ) : null}
           {recommendationsLoading ? (
             <ActivityIndicator color={colors.tint} />
           ) : recommendationsError ? (
@@ -632,17 +768,31 @@ const HomeScreen = () => {
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => (
-                <View style={styles.card}>
-                  <Poster uri={item.poster_path} title={item.title} />
-                  <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={[styles.movieMeta, { color: mutedText }]} numberOfLines={1}>
-                    {item.release_date ? new Date(item.release_date).getFullYear() : '—'}
-                  </Text>
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const numericId = resolveNumericId(item.id);
+                const isSaved = numericId !== null ? watchlistIds.has(numericId) : false;
+                return (
+                  <View style={styles.card}>
+                    <Poster
+                      uri={item.poster_path}
+                      title={item.title}
+                      watchlisted={isSaved}
+                      toggleBusy={numericId !== null && watchlistBusyId === numericId}
+                      onToggleWatchlist={
+                        numericId !== null
+                          ? () => handleToggleWatchlist(numericId, toWatchlistPayloadFromTmdbMovie(item))
+                          : null
+                      }
+                    />
+                    <Text style={[styles.movieTitle, { color: colors.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.movieMeta, { color: mutedText }]} numberOfLines={1}>
+                      {item.release_date ? new Date(item.release_date).getFullYear() : '—'}
+                    </Text>
+                  </View>
+                );
+              }}
             />
           )}
         </View>
@@ -675,9 +825,23 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', minHeight: 140 },
   listContent: { paddingHorizontal: 16, paddingBottom: 16 },
   card: { width: 140, marginHorizontal: 8 },
+  posterWrapper: { width: 140, height: 210, borderRadius: 16, overflow: 'hidden', position: 'relative' },
   poster: { width: 140, height: 210, borderRadius: 16, backgroundColor: '#1f1f1f' },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
   posterFallbackText: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  watchlistToggle: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#000000aa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchlistToggleActive: { backgroundColor: '#0d6efd' },
+  watchlistToggleDisabled: { opacity: 0.6 },
   movieTitle: { marginTop: 10, fontSize: 14, fontWeight: '600' },
   movieMeta: { marginTop: 4, fontSize: 12 },
   footer: { paddingHorizontal: 16, paddingVertical: 12 },
@@ -737,6 +901,7 @@ const styles = StyleSheet.create({
   },
   recoMeta: { marginTop: 4, fontSize: 12 },
   trendingSection: { minHeight: 260 },
+  watchlistNotice: { fontSize: 12, marginBottom: 8, textAlign: 'center' },
 });
 
 export default HomeScreen;

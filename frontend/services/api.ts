@@ -347,13 +347,30 @@ export type WatchlistEntry = {
   } | null;
 };
 
+export type WatchlistMoviePayload = {
+  title?: string | null;
+  name?: string | null;
+  description?: string | null;
+  overview?: string | null;
+  poster?: string | null;
+  poster_path?: string | null;
+  releaseDate?: string | null;
+  release_date?: string | null;
+  genres?: Array<string | number>;
+  genre_ids?: Array<string | number>;
+};
+
 export const fetchWatchlist = async (userId: number) => {
   const response = await api.get(`/watchlists/${userId}`);
   return response.data as WatchlistEntry[];
 };
 
-export const addToWatchlist = async (movieId: number) => {
-  const response = await api.post('/watchlists', { movieId });
+export const addToWatchlist = async (movieId: number, movie?: WatchlistMoviePayload) => {
+  const payload: { movieId: number; movie?: WatchlistMoviePayload } = { movieId };
+  if (movie && Object.keys(movie).length > 0) {
+    payload.movie = movie;
+  }
+  const response = await api.post('/watchlists', payload);
   return response.data as WatchlistEntry;
 };
 
