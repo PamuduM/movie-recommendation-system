@@ -1,9 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Button, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 
 import { useAuth } from '../contexts/AuthContext';
-import { fetchFollowers, fetchFollowing, followUser, searchUsers, unfollowUser } from '../services/api';
+import {
+  addToWatchlist as apiAddToWatchlist,
+  fetchFollowers,
+  fetchFollowing,
+  fetchWatchlist,
+  followUser,
+  removeFromWatchlist as apiRemoveFromWatchlist,
+  searchMovies,
+  searchUsers,
+  unfollowUser,
+} from '../services/api';
+import type { WatchlistEntry } from '../services/api';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type FollowUser = {
@@ -11,6 +22,14 @@ type FollowUser = {
   username: string;
   avatar?: string | null;
   bio?: string | null;
+};
+
+type MovieSearchResult = {
+  id: number | string;
+  title?: string | null;
+  releaseDate?: string | null;
+  release_date?: string | null;
+  overview?: string | null;
 };
 
 import * as ImagePicker from 'expo-image-picker';
@@ -31,6 +50,14 @@ const ProfileScreen = () => {
   const [userResults, setUserResults] = useState<FollowUser[]>([]);
   const [followingIds, setFollowingIds] = useState<Set<number>>(new Set());
   const [followBusyId, setFollowBusyId] = useState<number | null>(null);
+  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
+  const [watchlistSearch, setWatchlistSearch] = useState('');
+  const [watchlistResults, setWatchlistResults] = useState<MovieSearchResult[]>([]);
+  const [watchlistSearchLoading, setWatchlistSearchLoading] = useState(false);
+  const [watchlistAddingId, setWatchlistAddingId] = useState<number | null>(null);
+  const [watchlistRemovingId, setWatchlistRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -137,6 +164,8 @@ const ProfileScreen = () => {
     }));
   }, [userResults, followingIds]);
 
+  const watchlistMovieIds = useMemo(() => new Set(watchlist.map((item) => item.movieId)), [watchlist]);
+
   const toggleFollow = async (target: FollowUser & { isFollowing: boolean }) => {
     if (!user?.id) return;
     setFollowBusyId(target.id);
@@ -172,6 +201,81 @@ const ProfileScreen = () => {
     const text = following.length ? following.map((item) => item.username).join('\n') : 'Not following anyone yet.';
     Alert.alert('Following', text);
   };
+
+  const loadWatchlist = useCallback(async () => {
+    if (!user?.id) {
+      setWatchlist([]);
+      return;
+    }
+    setWatchlistLoading(true);
+    setWatchlistError(null);
+    try {
+      const entries = await fetchWatchlist(user.id);
+      setWatchlist(Array.isArray(entries) ? entries : []);
+    } catch (e: any) {
+      setWatchlistError(e?.response?.data?.error ?? e?.message ?? 'Failed to load watchlist');
+    } finally {
+      setWatchlistLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadWatchlist();
+  }, [loadWatchlist]);
+
+  const handleWatchlistSearch = useCallback(async () => {
+    const query = watchlistSearch.trim();
+    if (query.length < 2) {
+      setWatchlistResults([]);
+      return;
+    }
+    setWatchlistSearchLoading(true);
+    setWatchlistError(null);
+    try {
+      const results = await searchMovies(query);
+      setWatchlistResults(Array.isArray(results) ? results.slice(0, 10) : []);
+    } catch (e: any) {
+      setWatchlistError(e?.response?.data?.error ?? e?.message ?? 'Movie search failed');
+    } finally {
+      setWatchlistSearchLoading(false);
+    }
+  }, [watchlistSearch]);
+
+  const handleAddToWatchlist = useCallback(
+    async (movieId: number) => {
+      if (!movieId || watchlistMovieIds.has(movieId)) return;
+      setWatchlistError(null);
+      setWatchlistAddingId(movieId);
+      try {
+        await apiAddToWatchlist(movieId);
+        await loadWatchlist();
+        setMessage('Movie added to watchlist');
+      } catch (e: any) {
+        setWatchlistError(e?.response?.data?.error ?? e?.message ?? 'Failed to add movie');
+      } finally {
+        setWatchlistAddingId(null);
+      }
+    },
+    [loadWatchlist, watchlistMovieIds]
+  );
+
+  const handleRemoveFromWatchlist = useCallback(
+    async (entryId: number) => {
+      if (!entryId) return;
+      setWatchlistError(null);
+      setWatchlistRemovingId(entryId);
+      try {
+        await apiRemoveFromWatchlist(entryId);
+        await loadWatchlist();
+        setMessage('Movie removed from watchlist');
+      } catch (e: any) {
+        setWatchlistError(e?.response?.data?.error ?? e?.message ?? 'Failed to remove movie');
+      } finally {
+        setWatchlistRemovingId(null);
+      }
+    },
+    [loadWatchlist]
+  );
 
   return (
     <View style={styles.container}>
@@ -261,6 +365,89 @@ const ProfileScreen = () => {
               <Button title="Verify email" onPress={() => router.push('/verify-email')} />
             </View>
           ) : null}
+
+          <View style={styles.watchlistSection}>
+            <Text style={styles.sectionTitle}>Watchlist ({watchlist.length})</Text>
+            {watchlistError ? <Text style={styles.error}>{watchlistError}</Text> : null}
+            {watchlistLoading ? (
+              <Text style={styles.muted}>Loading watchlist…</Text>
+            ) : watchlist.length ? (
+              watchlist.map((entry) => {
+                const releaseLabel = entry.Movie?.releaseDate ?? (entry.Movie as any)?.release_date ?? null;
+                return (
+                  <View key={`watchlist-${entry.id}`} style={styles.watchlistRow}>
+                    <View style={styles.watchlistInfo}>
+                      <Text style={styles.watchlistMovieTitle}>{entry.Movie?.title ?? `Movie #${entry.movieId}`}</Text>
+                      {releaseLabel ? <Text style={styles.watchlistMovieMeta}>{releaseLabel}</Text> : null}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveFromWatchlist(entry.id)}
+                      style={styles.watchlistRemoveBtn}
+                      disabled={watchlistRemovingId === entry.id}
+                    >
+                      <Text style={styles.watchlistRemoveText}>
+                        {watchlistRemovingId === entry.id ? 'Removing…' : 'Remove'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.muted}>No movies saved yet.</Text>
+            )}
+
+            <Text style={styles.sectionSubtitle}>Add movies</Text>
+            <TextInput
+              style={styles.input}
+              value={watchlistSearch}
+              onChangeText={setWatchlistSearch}
+              placeholder="Search FlickX movies"
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              onSubmitEditing={() => handleWatchlistSearch()}
+            />
+            <Button
+              title={watchlistSearchLoading ? 'Searching…' : 'Search movies'}
+              onPress={() => handleWatchlistSearch()}
+              disabled={watchlistSearchLoading}
+            />
+
+            {watchlistResults.length ? (
+              <View style={styles.watchlistResults}>
+                {watchlistResults.map((result) => {
+                  const movieId = Number(result.id);
+                  const hasValidId = Number.isFinite(movieId) && movieId > 0;
+                  const alreadyAdded = hasValidId ? watchlistMovieIds.has(movieId) : false;
+                  const releaseLabel = result.releaseDate ?? result.release_date ?? null;
+                  const disableButton = !hasValidId || alreadyAdded || watchlistAddingId === movieId;
+                  return (
+                    <View key={`watchlist-result-${result.id}`} style={styles.watchlistResultRow}>
+                      <View style={styles.watchlistInfo}>
+                        <Text style={styles.watchlistMovieTitle}>{result.title ?? 'Untitled movie'}</Text>
+                        {releaseLabel ? <Text style={styles.watchlistMovieMeta}>{releaseLabel}</Text> : null}
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => (hasValidId ? handleAddToWatchlist(movieId) : undefined)}
+                        disabled={disableButton}
+                        style={[styles.watchlistAddBtn, disableButton && styles.watchlistAddBtnDisabled]}
+                      >
+                        <Text style={styles.watchlistAddText}>
+                          {!hasValidId
+                            ? 'Unavailable'
+                            : alreadyAdded
+                              ? 'Added'
+                              : watchlistAddingId === movieId
+                                ? 'Adding…'
+                                : 'Add'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
 
           <View style={styles.searchSection}>
             <Text style={styles.sectionTitle}>Find users</Text>
@@ -375,6 +562,38 @@ const styles = StyleSheet.create({
   cameraIconContainer: { position: 'absolute', bottom: 4, right: 4, backgroundColor: '#00000088', padding: 6, borderRadius: 16 },
   removeAvatarBtn: { marginTop: 8 },
   removeAvatarText: { color: '#b00020', fontSize: 12 },
+  watchlistSection: { marginTop: 24 },
+  sectionSubtitle: { fontSize: 13, fontWeight: '600', marginTop: 16, marginBottom: 6 },
+  watchlistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  watchlistInfo: { flex: 1, marginRight: 12 },
+  watchlistMovieTitle: { fontSize: 15, fontWeight: '600' },
+  watchlistMovieMeta: { fontSize: 12, color: '#666', marginTop: 2 },
+  watchlistRemoveBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: '#fdecea' },
+  watchlistRemoveText: { color: '#b00020', fontWeight: '600' },
+  watchlistResults: { marginTop: 12 },
+  watchlistResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f1f1',
+  },
+  watchlistAddBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#0a7',
+  },
+  watchlistAddBtnDisabled: { backgroundColor: '#ccc' },
+  watchlistAddText: { color: '#fff', fontWeight: '600' },
 });
 
 export default ProfileScreen;

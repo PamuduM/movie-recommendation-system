@@ -334,4 +334,32 @@ export const fetchNotifications = async (userId: number) => {
   return response.data;
 };
 
+export type WatchlistEntry = {
+  id: number;
+  userId: number;
+  movieId: number;
+  Movie?: {
+    id: number;
+    title?: string | null;
+    description?: string | null;
+    poster?: string | null;
+    releaseDate?: string | null;
+  } | null;
+};
+
+export const fetchWatchlist = async (userId: number) => {
+  const response = await api.get(`/watchlists/${userId}`);
+  return response.data as WatchlistEntry[];
+};
+
+export const addToWatchlist = async (movieId: number) => {
+  const response = await api.post('/watchlists', { movieId });
+  return response.data as WatchlistEntry;
+};
+
+export const removeFromWatchlist = async (watchlistId: number) => {
+  const response = await api.delete(`/watchlists/${watchlistId}`);
+  return response.data;
+};
+
 // Add more API methods for movies, reviews, users, etc.
