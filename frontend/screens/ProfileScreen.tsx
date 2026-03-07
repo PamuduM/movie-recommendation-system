@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Button, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useColorScheme } from '../hooks/use-color-scheme';
 
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -43,6 +44,8 @@ import * as ImagePicker from 'expo-image-picker';
 
 const ProfileScreen = () => {
   const { user, logout, updateProfile } = useAuth();
+  const colorScheme = useColorScheme();
+  const binaryTextColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [avatar, setAvatar] = useState('');
@@ -457,7 +460,7 @@ const ProfileScreen = () => {
                         disabled={disableButton}
                         style={[styles.watchlistAddBtn, disableButton && styles.watchlistAddBtnDisabled]}
                       >
-                        <Text style={styles.watchlistAddText}>
+                        <Text style={[styles.watchlistAddText, { color: binaryTextColor }]}>
                           {!hasValidId
                             ? 'Unavailable'
                             : alreadyAdded
@@ -618,7 +621,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a7',
   },
   watchlistAddBtnDisabled: { backgroundColor: '#ccc' },
-  watchlistAddText: { color: '#fff', fontWeight: '600' },
+  watchlistAddText: { fontWeight: '600' },
 });
 
 export default ProfileScreen;

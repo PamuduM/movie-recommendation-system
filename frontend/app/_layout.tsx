@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { Text, TextInput } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -12,6 +13,9 @@ import { useEffect } from 'react';
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+const originalTextDefaults = (Text as any).defaultProps ?? {};
+const originalTextInputDefaults = (TextInput as any).defaultProps ?? {};
 
 function AuthGate() {
   const { user, isLoading } = useAuth();
@@ -59,6 +63,20 @@ export default function RootLayout() {
 
 function RootNavigation() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    const textColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
+
+    (Text as any).defaultProps = {
+      ...originalTextDefaults,
+      style: [{ color: textColor }, originalTextDefaults.style].filter(Boolean),
+    };
+
+    (TextInput as any).defaultProps = {
+      ...originalTextInputDefaults,
+      style: [{ color: textColor }, originalTextInputDefaults.style].filter(Boolean),
+    };
+  }, [colorScheme]);
 
   return (
     <NavigationThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

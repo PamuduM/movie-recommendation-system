@@ -228,9 +228,10 @@ type PosterProps = {
   watchlisted?: boolean;
   toggleBusy?: boolean;
   onToggleWatchlist?: (() => void) | null;
+  fallbackTextColor?: string;
 };
 
-const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist }: PosterProps) => {
+const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist, fallbackTextColor }: PosterProps) => {
   const [failed, setFailed] = useState(false);
   const resolvedUri = useMemo(() => resolvePosterUri(uri), [uri]);
   const showToggle = typeof onToggleWatchlist === 'function';
@@ -241,7 +242,7 @@ const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist }: Post
         <Image source={{ uri: resolvedUri }} style={styles.poster} onError={() => setFailed(true)} />
       ) : (
         <View style={[styles.poster, styles.posterFallback]}>
-          <Text style={[styles.posterFallbackText]}>{title?.slice(0, 2).toUpperCase()}</Text>
+          <Text style={[styles.posterFallbackText, fallbackTextColor ? { color: fallbackTextColor } : null]}>{title?.slice(0, 2).toUpperCase()}</Text>
         </View>
       )}
       {showToggle ? (
@@ -270,6 +271,7 @@ const HomeScreen = () => {
   const { darkMode, toggleTheme } = useTheme();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const binaryTextColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
   const cardBackground = colorScheme === 'dark' ? '#1f1f1f' : '#f5f7fa';
   const surfaceBorder = colorScheme === 'dark' ? '#2a2a2a' : '#e2e8f0';
   const mutedText = colors.icon;
@@ -549,6 +551,7 @@ const HomeScreen = () => {
           title={item.title}
           watchlisted={isSaved}
           toggleBusy={numericId !== null && watchlistBusyId === numericId}
+          fallbackTextColor={binaryTextColor}
           onToggleWatchlist={
             numericId !== null
               ? () => handleToggleWatchlist(numericId, toWatchlistPayloadFromMoodMovie(item))
@@ -639,7 +642,7 @@ const HomeScreen = () => {
                     preset.accent,
                     colorScheme === 'dark' ? 0.32 : 0.16
                   );
-              const chipLabelColor = isActive ? '#ffffff' : colors.text;
+              const chipLabelColor = isActive ? binaryTextColor : colors.text;
               const chipDescriptionColor = isActive ? 'rgba(255,255,255,0.85)' : mutedText;
               return (
                 <TouchableOpacity
@@ -676,7 +679,7 @@ const HomeScreen = () => {
               onPress={handleAnalyzeText}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryButtonText}>Analyze</Text>
+              <Text style={[styles.primaryButtonText, { color: binaryTextColor }]}>Analyze</Text>
             </TouchableOpacity>
           </View>
           {analysisMessage ? (
@@ -794,6 +797,7 @@ const HomeScreen = () => {
                       title={item.title}
                       watchlisted={isSaved}
                       toggleBusy={numericId !== null && watchlistBusyId === numericId}
+                      fallbackTextColor={binaryTextColor}
                       onToggleWatchlist={
                         numericId !== null
                           ? () => handleToggleWatchlist(numericId, toWatchlistPayloadFromTmdbMovie(item))
@@ -844,7 +848,7 @@ const styles = StyleSheet.create({
   posterWrapper: { width: 140, height: 210, borderRadius: 16, overflow: 'hidden', position: 'relative' },
   poster: { width: 140, height: 210, borderRadius: 16, backgroundColor: '#1f1f1f' },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
-  posterFallbackText: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  posterFallbackText: { fontSize: 22, fontWeight: '700' },
   watchlistToggle: {
     position: 'absolute',
     bottom: 10,
@@ -894,7 +898,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 12,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
+  primaryButtonText: { fontWeight: '700' },
   analysisText: { marginTop: 10, fontSize: 12 },
   sectionHeader: {
     flexDirection: 'row',

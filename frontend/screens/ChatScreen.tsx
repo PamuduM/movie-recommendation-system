@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useColorScheme } from '../hooks/use-color-scheme';
 
 import { useAuth } from '../contexts/AuthContext';
 import { fetchChatContacts, fetchChatThread, sendChatMessage } from '../services/api';
@@ -44,6 +45,8 @@ const formatTime = (value?: string | null) => {
 function ChatScreen() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const colorScheme = useColorScheme();
+  const binaryTextColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -262,7 +265,7 @@ function ChatScreen() {
                 onPress={handleSend}
                 disabled={!message.trim() || sending}
               >
-                <Text style={styles.sendTxt}>{sending ? 'Sending…' : 'Send'}</Text>
+                <Text style={[styles.sendTxt, { color: binaryTextColor }]}>{sending ? 'Sending…' : 'Send'}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -365,7 +368,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: '#aac8ff' },
-  sendTxt: { color: '#fff', fontWeight: '700' },
+  sendTxt: { fontWeight: '700' },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   muted: { color: '#777', textAlign: 'center' },
