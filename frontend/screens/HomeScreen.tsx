@@ -63,6 +63,11 @@ type MoodPreset = {
 };
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const TRENDING_CARD_WIDTH = 140;
+const RECOMMENDATION_CARD_WIDTH = 150;
+const HORIZONTAL_CARD_GAP = 12;
+const TRENDING_SNAP_INTERVAL = TRENDING_CARD_WIDTH + HORIZONTAL_CARD_GAP;
+const RECOMMENDATION_SNAP_INTERVAL = RECOMMENDATION_CARD_WIDTH + HORIZONTAL_CARD_GAP;
 
 const resolvePosterUri = (uri?: string | null) => {
   if (!uri) return null;
@@ -731,6 +736,10 @@ const HomeScreen = () => {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToAlignment="start"
+              snapToInterval={RECOMMENDATION_SNAP_INTERVAL}
+              disableIntervalMomentum
               contentContainerStyle={styles.recommendationsList}
             >
               {recommendedMovies.map((item) => renderRecommendationCard(item))}
@@ -769,6 +778,10 @@ const HomeScreen = () => {
               keyExtractor={(item) => String(item.id)}
               horizontal
               showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToAlignment="start"
+              snapToInterval={TRENDING_SNAP_INTERVAL}
+              disableIntervalMomentum
               removeClippedSubviews={false}
               contentContainerStyle={styles.listContent}
               onEndReached={handleLoadMore}
@@ -844,9 +857,15 @@ const styles = StyleSheet.create({
   themeToggleText: { fontSize: 12, fontWeight: '600', marginLeft: 6 },
   center: { alignItems: 'center', justifyContent: 'center', minHeight: 140 },
   listContent: { paddingHorizontal: 16, paddingBottom: 16 },
-  card: { width: 140, marginHorizontal: 8 },
-  posterWrapper: { width: 140, height: 210, borderRadius: 16, overflow: 'hidden', position: 'relative' },
-  poster: { width: 140, height: 210, borderRadius: 16, backgroundColor: '#1f1f1f' },
+  card: { width: TRENDING_CARD_WIDTH, marginRight: HORIZONTAL_CARD_GAP },
+  posterWrapper: {
+    width: TRENDING_CARD_WIDTH,
+    height: 210,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  poster: { width: TRENDING_CARD_WIDTH, height: 210, borderRadius: 16, backgroundColor: '#1f1f1f' },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
   posterFallbackText: { fontSize: 22, fontWeight: '700' },
   watchlistToggle: {
@@ -913,8 +932,8 @@ const styles = StyleSheet.create({
   recommendationsWrapper: { minHeight: 240, paddingBottom: 24, paddingHorizontal: 16 },
   recommendationsList: { paddingHorizontal: 16 },
   recoCard: {
-    width: 150,
-    marginHorizontal: 8,
+    width: RECOMMENDATION_CARD_WIDTH,
+    marginRight: HORIZONTAL_CARD_GAP,
     padding: 12,
     borderRadius: 18,
   },
