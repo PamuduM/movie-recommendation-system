@@ -67,7 +67,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
-    if ((status === 401 || status === 403) && unauthorizedHandler) {
+    const errorMessage = String(error?.response?.data?.error ?? '').toLowerCase();
+    const isAuthFailure =
+      status === 401 ||
+      (status === 403 && (errorMessage.includes('invalid token') || errorMessage.includes('jwt')));
+    if (isAuthFailure && unauthorizedHandler) {
       Promise.resolve(unauthorizedHandler()).catch(() => undefined);
     }
     if (__DEV__) {

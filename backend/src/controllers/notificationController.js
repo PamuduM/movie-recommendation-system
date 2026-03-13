@@ -1,4 +1,56 @@
-const { Notification } = require('../models');
+const { Notification, Follow, User } = require('../models');
+
+const FOLLOW_NOTIFICATION_SUFFIX = 'started following you.';
+
+const normalizeFollowNotifications = async (requestedUserId, notifications) => {
+  const followNotifications = notifications.filter((item) => item.type === 'follow');
+  if (!followNotifications.length) return notifications;
+
+  const follows = await Follow.findAll({
+    where: { followingId: requestedUserId },
+    include: [{ model: User, as: 'follower', attributes: ['username'] }],
+    order: [['createdAt', 'ASC']],
+  });
+
+  if (!follows.length) return notifications;
+
+  const availableFollows = follows.slice();
+  const pickClosestFollow = (timestamp) => {
+    if (!availableFollows.length) return null;
+    let bestIndex = 0;
+    let bestDiff = Infinity;
+    for (let index = 0; index < availableFollows.length; index += 1) {
+      const followTime = new Date(availableFollows[index].createdAt).getTime();
+      const diff = Math.abs(followTime - timestamp);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIndex = index;
+      }
+    }
+    const [match] = availableFollows.splice(bestIndex, 1);
+    return match;
+  };
+
+  return notifications.map((notification) => {
+    if (notification.type !== 'follow') return notification;
+    const createdAtValue = new Date(notification.createdAt).getTime();
+    if (Number.isNaN(createdAtValue)) return notification;
+
+    const closestFollow = pickClosestFollow(createdAtValue);
+    const followerName = closestFollow?.follower?.username;
+    if (!followerName) return notification;
+
+    const currentMessage = String(notification.message || '').trim();
+    if (currentMessage.endsWith(FOLLOW_NOTIFICATION_SUFFIX) && currentMessage.startsWith(`${followerName} `)) {
+      return notification;
+    }
+
+    return {
+      ...notification,
+      message: `${followerName} ${FOLLOW_NOTIFICATION_SUFFIX}`,
+    };
+  });
+};
 
 exports.getNotificationsByUser = async (req, res) => {
   try {
@@ -14,7 +66,10 @@ exports.getNotificationsByUser = async (req, res) => {
       where: { userId: requestedUserId },
       order: [['createdAt', 'DESC']]
     });
-    res.json(notifications);
+
+    const plainNotifications = notifications.map((entry) => entry.get({ plain: true }));
+    const normalized = await normalizeFollowNotifications(requestedUserId, plainNotifications);
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

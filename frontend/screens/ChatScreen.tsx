@@ -81,8 +81,12 @@ function ChatScreen() {
         } else if (!selectedContactId || !data.some((item) => item.id === selectedContactId)) {
           setSelectedContactId(data[0].id);
         }
-      } catch (error) {
-        setContactsError('Failed to load followers. Pull to refresh.');
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.message ??
+          'Failed to load followers. Pull to refresh.';
+        setContactsError(message);
       } finally {
         setContactsLoading(false);
       }
@@ -99,8 +103,12 @@ function ChatScreen() {
         const data: ThreadMessage[] = await fetchChatThread(userId, contactId);
         setThread(data);
         setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 50);
-      } catch (error) {
-        setThreadError('Failed to load conversation.');
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error ??
+          error?.message ??
+          'Failed to load conversation.';
+        setThreadError(message);
         setThread([]);
       } finally {
         setThreadLoading(false);
@@ -135,8 +143,12 @@ function ChatScreen() {
       await sendChatMessage(selectedContactId, trimmed);
       setMessage('');
       await Promise.all([loadThread(selectedContactId), loadContacts(searchTerm)]);
-    } catch (error) {
-      setThreadError('Failed to send message.');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ??
+        error?.message ??
+        'Failed to send message.';
+      setThreadError(message);
     } finally {
       setSending(false);
     }
