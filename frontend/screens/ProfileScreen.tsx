@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Button, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Button, TextInput, Image, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useColorScheme } from '../hooks/use-color-scheme';
@@ -306,7 +306,12 @@ const ProfileScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       {user ? (
         <View style={styles.card}>
           <View style={styles.profileHeader}>
@@ -486,11 +491,9 @@ const ProfileScreen = () => {
               placeholder="Search by username"
             />
             <Button title="Search users" onPress={handleUserSearch} />
-            <FlatList
-              data={userResultsWithFollowState}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <View style={styles.userRow}>
+            {userResultsWithFollowState.length ? (
+              userResultsWithFollowState.map((item) => (
+                <View key={`user-result-${item.id}`} style={styles.userRow}>
                   <View style={styles.userInfo}>
                     <Text style={styles.userName}>{item.username}</Text>
                     {item.bio ? <Text style={styles.userBio}>{item.bio}</Text> : null}
@@ -501,11 +504,10 @@ const ProfileScreen = () => {
                     disabled={followBusyId === item.id}
                   />
                 </View>
-              )}
-              ListEmptyComponent={
-                userQuery.trim().length >= 2 ? <Text style={styles.emptyText}>No users found.</Text> : null
-              }
-            />
+              ))
+            ) : userQuery.trim().length >= 2 ? (
+              <Text style={styles.emptyText}>No users found.</Text>
+            ) : null}
           </View>
 
           <View style={styles.followSection}>
@@ -540,13 +542,18 @@ const ProfileScreen = () => {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {message ? <Text style={styles.message}>{message}</Text> : null}
 
-      {user ? <Button title="Logout" onPress={logout} /> : null}
-    </View>
+      {user ? (
+        <View style={styles.logoutWrap}>
+          <Button title="Logout" onPress={logout} />
+        </View>
+      ) : null}
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, justifyContent: 'center' },
+  container: { flex: 1 },
+  contentContainer: { padding: 16, paddingBottom: 36 },
   card: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -622,6 +629,7 @@ const styles = StyleSheet.create({
   },
   watchlistAddBtnDisabled: { backgroundColor: '#ccc' },
   watchlistAddText: { fontWeight: '600' },
+  logoutWrap: { marginTop: 4 },
 });
 
 export default ProfileScreen;
