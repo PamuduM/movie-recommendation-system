@@ -15,6 +15,10 @@ import { router } from 'expo-router';
 
 import { useAuth } from '../contexts/AuthContext';
 
+const AUTH_BACKGROUND = {
+  uri: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1400&q=80',
+};
+
 const RegisterScreen = () => {
   const { registerWithEmailPassword, isLoading, user } = useAuth();
   const [username, setUsername] = useState('');
@@ -64,10 +68,12 @@ const RegisterScreen = () => {
 
   return (
     <ImageBackground
-      source={require('../assets/images/flickx.png')}
+      source={AUTH_BACKGROUND}
+      defaultSource={require('../assets/images/splash-icon.png')}
       style={styles.background}
       resizeMode="cover"
-      blurRadius={18}
+      blurRadius={8}
+      imageStyle={styles.backgroundImage}
     >
       <View style={styles.overlay}>
         <KeyboardAvoidingView
@@ -128,9 +134,10 @@ const RegisterScreen = () => {
 
 const styles = StyleSheet.create({
   background: { flex: 1 },
+  backgroundImage: { opacity: 0.92 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(8, 10, 20, 0.72)',
+    backgroundColor: 'rgba(8, 10, 20, 0.38)',
   },
   container: {
     flex: 1,
