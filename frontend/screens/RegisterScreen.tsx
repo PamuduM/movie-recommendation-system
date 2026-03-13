@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
+import {
+  ActivityIndicator,
+  Button,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -52,54 +63,111 @@ const RegisterScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        value={username}
-        onChangeText={setUsername}
-        placeholder="Username"
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Password"
-        secureTextEntry
-      />
-      <TextInput
-        style={styles.input}
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="Confirm Password"
-        secureTextEntry
-      />
+    <ImageBackground
+      source={require('../assets/images/flickx.png')}
+      style={styles.background}
+      resizeMode="cover"
+      blurRadius={18}
+    >
+      <View style={styles.overlay}>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Text style={styles.heading}>Create your account</Text>
+          <Text style={styles.subheading}>Build your watchlist and discover mood-ready picks.</Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.card}>
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Username"
+              placeholderTextColor="#aab0c5"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor="#aab0c5"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              placeholderTextColor="#aab0c5"
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.input}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm Password"
+              placeholderTextColor="#aab0c5"
+              secureTextEntry
+            />
 
-      <Button title={submitting ? 'Creating account…' : 'Create account'} onPress={onRegister} disabled={submitting} />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Pressable onPress={() => router.replace('/auth')} style={styles.linkWrap}>
-        <Text style={styles.linkText}>Already have an account? Log in</Text>
-      </Pressable>
-    </View>
+            <Button title={submitting ? 'Creating account…' : 'Create account'} onPress={onRegister} disabled={submitting} />
+
+            <Pressable onPress={() => router.replace('/auth')} style={styles.linkWrap}>
+              <Text style={styles.linkText}>Already have an account? Log in</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 16 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, marginBottom: 12 },
-  error: { color: '#b00020', marginBottom: 12, textAlign: 'center' },
+  background: { flex: 1 },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 10, 20, 0.72)',
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+  },
+  heading: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  subheading: {
+    color: '#c6cde5',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  card: {
+    backgroundColor: 'rgba(13, 18, 34, 0.84)',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    color: '#f7f9ff',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  error: { color: '#ff8f8f', marginBottom: 12, textAlign: 'center' },
   linkWrap: { marginTop: 16, alignItems: 'center' },
-  linkText: { color: '#3366ff', fontWeight: '600' },
+  linkText: { color: '#9ac3ff', fontWeight: '600' },
 });
 
 export default RegisterScreen;
