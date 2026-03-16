@@ -371,13 +371,20 @@ const HomeScreen = () => {
   }, [loadWatchlist]);
 
   const resolvedMood = selectedMood ?? detectedMood ?? null;
+  const bumpMoodNonce = useCallback(() => {
+    setMoodNonce((prev) => prev + 1);
+  }, []);
   const resolvedMoodDetails = useMemo(
     () => (resolvedMood ? MOOD_PRESETS.find((preset) => preset.id === resolvedMood) ?? null : null),
     [resolvedMood]
   );
 
   const loadMoodRecommendations = useCallback(
-    async (moodId: string, origin: 'preset' | 'text' = 'preset') => {
+    async (
+      moodId: string,
+      origin: 'preset' | 'text' = 'preset',
+      requestNonce = moodNonce
+    ) => {
       requestIdRef.current += 1;
       const requestId = requestIdRef.current;
       setRecommendationsLoading(true);
@@ -388,7 +395,7 @@ const HomeScreen = () => {
           limit: moodLimit,
           textSample: origin === 'text' ? lastAnalyzedText || textMood : undefined,
           fallbackGenres: resolvedMoodDetails?.genres,
-          refreshNonce: moodNonce,
+          refreshNonce: requestNonce,
         };
         const response = await fetchMoodRecommendations(payload);
         if (requestId !== requestIdRef.current) return;
@@ -444,7 +451,7 @@ const HomeScreen = () => {
     setDetectedMood(null);
     setAnalysisMessage(null);
     setLastAnalyzedText('');
-    setMoodNonce(Date.now());
+    bumpMoodNonce();
   };
 
   const handleAnalyzeText = () => {
@@ -465,7 +472,7 @@ const HomeScreen = () => {
       setAnalysisMessage(
         preset ? `Detected a ${preset.label.toLowerCase()} mood from your text.` : 'Mood detected.'
       );
-      setMoodNonce(Date.now());
+      bumpMoodNonce();
     } else {
       setAnalysisMessage('Could not map that text to a mood. Try a preset.');
       setDetectedMood(null);
@@ -473,7 +480,7 @@ const HomeScreen = () => {
   };
 
   const handleMoodRefresh = () => {
-    setMoodNonce(Date.now());
+    bumpMoodNonce();
   };
 
   const handleToggleMorePicks = () => {
@@ -481,7 +488,7 @@ const HomeScreen = () => {
       const next = prev >= 20 ? 12 : 24;
       return next;
     });
-    setMoodNonce(Date.now());
+    bumpMoodNonce();
   };
 
   const handlePullRefresh = async () => {
@@ -489,7 +496,11 @@ const HomeScreen = () => {
     try {
       await handleRefresh();
       if (resolvedMood) {
-        await loadMoodRecommendations(resolvedMood, selectedMood ? 'preset' : 'text');
+        await loadMoodRecommendations(
+          resolvedMood,
+          selectedMood ? 'preset' : 'text',
+          Date.now()
+        );
       }
       await loadWatchlist();
     } catch (err) {

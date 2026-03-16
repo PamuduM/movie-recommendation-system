@@ -357,6 +357,17 @@ const jitterScore = (base, seedFactor = 0) => {
 	return clamp01(noisy);
 };
 
+const seededShuffle = (items = [], seed = 1) => {
+	const list = [...items];
+	for (let index = list.length - 1; index > 0; index -= 1) {
+		const swapIndex = Math.floor(seededRandom(seed + index * 1.618) * (index + 1));
+		const current = list[index];
+		list[index] = list[swapIndex];
+		list[swapIndex] = current;
+	}
+	return list;
+};
+
 /**
  * Recommend movies for a user based on collaborative filtering, favorites, and watchlist.
  * This is a stub for integration with a real AI/ML model.
@@ -465,13 +476,30 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 		const ratingWeighted = ratingStats.normalized * (0.8 + ratingStats.confidence * 0.2);
 		const blended = moodScoreBase * 0.55 + ratingWeighted * 0.35 + ratingStats.confidence * 0.1;
 		const finalScore = jitterScore(clamp01(blended), seed + movieId);
-		return { entry, finalScore, ratingStats };
+		return { entry, blendedScore: clamp01(blended), finalScore, ratingStats };
 	});
 
-	scoredEntries.sort((a, b) => b.finalScore - a.finalScore);
+	scoredEntries.sort((a, b) => b.blendedScore - a.blendedScore || b.finalScore - a.finalScore);
+	const selectionPoolSize = Math.min(
+		scoredEntries.length,
+		Math.max(limit * 3, limit + 8)
+	);
+	const selectionPool = scoredEntries.slice(0, selectionPoolSize);
+	const remainingPool = scoredEntries.slice(selectionPoolSize);
+	const maxOffset = Math.max(selectionPool.length - limit, 0);
+	const startOffset = maxOffset
+		? Math.floor(seededRandom(seed * 0.013 + selectionPool.length) * (maxOffset + 1))
+		: 0;
+	const rotatedWindow = selectionPool.slice(startOffset, startOffset + limit);
+	const prioritizedEntries = [
+		...seededShuffle(rotatedWindow, seed + 97),
+		...selectionPool.slice(0, startOffset),
+		...selectionPool.slice(startOffset + rotatedWindow.length),
+		...remainingPool,
+	];
 	const recommendations = [];
 	const selectedIds = new Set();
-	scoredEntries.forEach(({ entry, finalScore, ratingStats }) => {
+	prioritizedEntries.forEach(({ entry, finalScore, ratingStats }) => {
 		if (recommendations.length >= limit) return;
 		if (selectedIds.has(entry.id)) return;
 		selectedIds.add(entry.id);
