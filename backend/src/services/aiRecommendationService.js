@@ -368,52 +368,54 @@ const seededShuffle = (items = [], seed = 1) => {
 	return list;
 };
 
-/**
- * Recommend movies for a user based on collaborative filtering, favorites, and watchlist.
- * This is a stub for integration with a real AI/ML model.
- */
-exports.getRecommendationsForUser = async (userId, limit = 10) => {
-	const watched = await Watchlist.findAll({ where: { userId } });
-	const favorite = await Favorite.findAll({ where: { userId } });
-	const excludeIds = [...watched.map((w) => w.movieId), ...favorite.map((f) => f.movieId)];
-	const where = {};
-	if (excludeIds.length > 0) {
-		where.id = { [Op.notIn]: excludeIds };
-	}
-
-	const movies = await Movie.findAll({ where, order: [['createdAt', 'DESC']], limit });
-	return movies;
-};
-
-exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallbackGenres = [], refreshNonce } = {}) => {
+const resolveMoodContext = ({ mood, textSample, fallbackGenres = [], refreshNonce } = {}) => {
 	const normalizedMood = (mood || '').toLowerCase() || detectMoodFromText(textSample) || DEFAULT_MOOD_KEY;
 	const moodConfig = MOOD_PRESETS[normalizedMood] || MOOD_PRESETS[DEFAULT_MOOD_KEY];
 	const focusGenres = Array.from(new Set([...(moodConfig.genres || []), ...(fallbackGenres || [])]));
-	const queryTokens = [moodConfig.label, normalizedMood, ...(MOOD_SYNONYM_TABLE[normalizedMood] || []), ...(focusGenres || []), textSample]
+	const queryTokens = [
+		moodConfig.label,
+		normalizedMood,
+		...(MOOD_SYNONYM_TABLE[normalizedMood] || []),
+		...focusGenres,
+		textSample,
+	]
 		.filter(Boolean)
 		.join(' ');
 	const seed = Number.isFinite(Number(refreshNonce)) ? Number(refreshNonce) : Date.now();
 
-	const localPool = await fetchLatestMovies(Math.max(limit * 6, 60));
+	return {
+		normalizedMood,
+		moodConfig,
+		focusGenres,
+		queryTokens,
+		seed,
+	};
+};
+
+const buildTmdbPool = async (focusGenres, limit, moodLabel) => {
 	const tmdbRawPool = tmdbClient
-		? await fetchTmdbForMood(focusGenres, Math.max(limit * 5, 40), moodConfig.label, { raw: true })
+		? await fetchTmdbForMood(focusGenres, Math.max(limit * 5, 40), moodLabel, { raw: true })
 		: [];
-	const tmdbPool = tmdbRawPool
+
+	return tmdbRawPool
 		.map((movie) => ({
 			id: Number(movie.id),
-		title: movie.title || movie.name || 'Untitled',
-		overview: movie.overview || '',
-		poster_path: movie.poster_path || null,
-		release_date: movie.release_date || movie.first_air_date || null,
-		genres: normalizeTmdbGenres(movie.genre_ids),
-		vote_average: movie.vote_average ?? null,
-		vote_count: movie.vote_count ?? null,
-		genre_ids: movie.genre_ids || [],
+			title: movie.title || movie.name || 'Untitled',
+			overview: movie.overview || '',
+			poster_path: movie.poster_path || null,
+			release_date: movie.release_date || movie.first_air_date || null,
+			genres: normalizeTmdbGenres(movie.genre_ids),
+			vote_average: movie.vote_average ?? null,
+			vote_count: movie.vote_count ?? null,
+			genre_ids: movie.genre_ids || [],
 		}))
 		.filter((movie) => Number.isFinite(movie.id));
+};
 
-	let pythonMatches = [];
+const buildPythonScoreMap = async ({ queryTokens, focusGenres, limit, localPool, tmdbPool }) => {
 	let aiSource = 'heuristic';
+	let pythonMatches = [];
+
 	try {
 		const dataset = buildPythonDataset(localPool, tmdbPool);
 		const result = await runPythonKeywordSearch({
@@ -434,10 +436,16 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 	pythonMatches.forEach((item, index) => {
 		const movieId = Number(item.movie_id ?? item.movieId ?? item.id);
 		if (!movieId || pythonScoreMap.has(movieId)) return;
-		const baseScore = typeof item.score === 'number' ? clamp01(item.score) : clamp01((pythonMatches.length - index) / pythonMatches.length);
+		const baseScore = typeof item.score === 'number'
+			? clamp01(item.score)
+			: clamp01((pythonMatches.length - index) / pythonMatches.length);
 		pythonScoreMap.set(movieId, baseScore);
 	});
 
+	return { pythonScoreMap, aiSource };
+};
+
+const buildCandidateEntries = async ({ localPool, tmdbPool, limit }) => {
 	const candidateMap = new Map();
 	const combinedCandidates = [];
 	const addCandidate = (entry) => {
@@ -455,64 +463,140 @@ exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallback
 		fallbackBatch.forEach((movie) => addCandidate({ type: 'local', id: Number(movie.id), movie }));
 	}
 
-	const ratingMap = await buildRatingMap(localPool.map((movie) => movie.id));
-	const scoredEntries = combinedCandidates.map((entry) => {
+	return { candidateMap, combinedCandidates };
+};
+
+const buildEntryRatingStats = (entry, ratingMap) => {
+	if (entry.type === 'local') {
+		return ratingMap.get(Number(entry.id)) || { average: null, count: 0, normalized: 0, confidence: 0 };
+	}
+
+	const average = Number(entry.movie.vote_average) || 0;
+	const count = Number(entry.movie.vote_count) || 0;
+	return {
+		average: count ? Number(average.toFixed(1)) : null,
+		count,
+		normalized: count ? clamp01(average / 10) : 0,
+		confidence: count ? clamp01(Math.log10(1 + count) / 3) : 0,
+	};
+};
+
+const scoreCandidateEntries = ({ combinedCandidates, pythonScoreMap, focusGenres, ratingMap, seed }) =>
+	combinedCandidates.map((entry) => {
 		const movieId = Number(entry.id);
 		const baseMovie = entry.type === 'local' ? entry.movie : { genres: entry.movie.genres };
 		const moodScoreBase = pythonScoreMap.get(movieId) ?? scoreMovieForMood(baseMovie, focusGenres);
-		let ratingStats;
-		if (entry.type === 'local') {
-			ratingStats = ratingMap.get(movieId) || { average: null, count: 0, normalized: 0, confidence: 0 };
-		} else {
-			const avg = Number(entry.movie.vote_average) || 0;
-			const count = Number(entry.movie.vote_count) || 0;
-			ratingStats = {
-				average: count ? Number(avg.toFixed(1)) : null,
-				count,
-				normalized: count ? clamp01(avg / 10) : 0,
-				confidence: count ? clamp01(Math.log10(1 + count) / 3) : 0,
-			};
-		}
+		const ratingStats = buildEntryRatingStats(entry, ratingMap);
 		const ratingWeighted = ratingStats.normalized * (0.8 + ratingStats.confidence * 0.2);
 		const blended = moodScoreBase * 0.55 + ratingWeighted * 0.35 + ratingStats.confidence * 0.1;
 		const finalScore = jitterScore(clamp01(blended), seed + movieId);
+
 		return { entry, blendedScore: clamp01(blended), finalScore, ratingStats };
 	});
 
-	scoredEntries.sort((a, b) => b.blendedScore - a.blendedScore || b.finalScore - a.finalScore);
-	const selectionPoolSize = Math.min(
-		scoredEntries.length,
-		Math.max(limit * 3, limit + 8)
+const prioritizeScoredEntries = ({ scoredEntries, limit, seed }) => {
+	const sortedEntries = [...scoredEntries].sort(
+		(a, b) => b.blendedScore - a.blendedScore || b.finalScore - a.finalScore
 	);
-	const selectionPool = scoredEntries.slice(0, selectionPoolSize);
-	const remainingPool = scoredEntries.slice(selectionPoolSize);
+	const selectionPoolSize = Math.min(sortedEntries.length, Math.max(limit * 3, limit + 8));
+	const selectionPool = sortedEntries.slice(0, selectionPoolSize);
+	const remainingPool = sortedEntries.slice(selectionPoolSize);
 	const maxOffset = Math.max(selectionPool.length - limit, 0);
 	const startOffset = maxOffset
 		? Math.floor(seededRandom(seed * 0.013 + selectionPool.length) * (maxOffset + 1))
 		: 0;
 	const rotatedWindow = selectionPool.slice(startOffset, startOffset + limit);
-	const prioritizedEntries = [
+
+	return [
 		...seededShuffle(rotatedWindow, seed + 97),
 		...selectionPool.slice(0, startOffset),
 		...selectionPool.slice(startOffset + rotatedWindow.length),
 		...remainingPool,
 	];
+};
+
+const serializeRecommendationEntries = ({ prioritizedEntries, candidateMap, limit, moodLabel }) => {
 	const recommendations = [];
 	const selectedIds = new Set();
+
 	prioritizedEntries.forEach(({ entry, finalScore, ratingStats }) => {
 		if (recommendations.length >= limit) return;
 		if (selectedIds.has(entry.id)) return;
 		selectedIds.add(entry.id);
+
 		if (entry.type === 'local') {
-			recommendations.push(serializeMovie(entry.movie, moodConfig.label, finalScore, ratingStats));
-		} else {
-			if (ratingStats.average) entry.movie.vote_average = ratingStats.average;
-			if (ratingStats.count) entry.movie.vote_count = ratingStats.count;
-			recommendations.push(serializeTmdbMovie(entry.movie, moodConfig.label, finalScore));
+			recommendations.push(serializeMovie(entry.movie, moodLabel, finalScore, ratingStats));
+			return;
 		}
+
+		if (ratingStats.average) entry.movie.vote_average = ratingStats.average;
+		if (ratingStats.count) entry.movie.vote_count = ratingStats.count;
+		recommendations.push(serializeTmdbMovie(entry.movie, moodLabel, finalScore));
 	});
 
-	let tmdbUsed = recommendations.some((item) => !candidateMap.get(item.id)?.type || candidateMap.get(item.id)?.type === 'tmdb');
+	const tmdbUsed = recommendations.some(
+		(item) => !candidateMap.get(item.id)?.type || candidateMap.get(item.id)?.type === 'tmdb'
+	);
+
+	return { recommendations, selectedIds, tmdbUsed };
+};
+
+/**
+ * Recommend movies for a user based on collaborative filtering, favorites, and watchlist.
+ * This is a stub for integration with a real AI/ML model.
+ */
+exports.getRecommendationsForUser = async (userId, limit = 10) => {
+	const watched = await Watchlist.findAll({ where: { userId } });
+	const favorite = await Favorite.findAll({ where: { userId } });
+	const excludeIds = [...watched.map((w) => w.movieId), ...favorite.map((f) => f.movieId)];
+	const where = {};
+	if (excludeIds.length > 0) {
+		where.id = { [Op.notIn]: excludeIds };
+	}
+
+	const movies = await Movie.findAll({ where, order: [['createdAt', 'DESC']], limit });
+	return movies;
+};
+
+exports.getMoodRecommendations = async ({ mood, textSample, limit = 12, fallbackGenres = [], refreshNonce } = {}) => {
+	const { normalizedMood, moodConfig, focusGenres, queryTokens, seed } = resolveMoodContext({
+		mood,
+		textSample,
+		fallbackGenres,
+		refreshNonce,
+	});
+	const localPool = await fetchLatestMovies(Math.max(limit * 6, 60));
+	const tmdbPool = await buildTmdbPool(focusGenres, limit, moodConfig.label);
+	const { pythonScoreMap, aiSource } = await buildPythonScoreMap({
+		queryTokens,
+		focusGenres,
+		limit,
+		localPool,
+		tmdbPool,
+	});
+	const { candidateMap, combinedCandidates } = await buildCandidateEntries({
+		localPool,
+		tmdbPool,
+		limit,
+	});
+	const ratingMap = await buildRatingMap(localPool.map((movie) => movie.id));
+	const scoredEntries = scoreCandidateEntries({
+		combinedCandidates,
+		pythonScoreMap,
+		focusGenres,
+		ratingMap,
+		seed,
+	});
+	const prioritizedEntries = prioritizeScoredEntries({ scoredEntries, limit, seed });
+	const serialized = serializeRecommendationEntries({
+		prioritizedEntries,
+		candidateMap,
+		limit,
+		moodLabel: moodConfig.label,
+	});
+	const recommendations = serialized.recommendations;
+	const selectedIds = serialized.selectedIds;
+	let tmdbUsed = serialized.tmdbUsed;
 	if (recommendations.length < limit && tmdbClient) {
 		const tmdbFallback = await fetchTmdbForMood(focusGenres, limit - recommendations.length, moodConfig.label);
 		tmdbFallback.forEach((item) => {
