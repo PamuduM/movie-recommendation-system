@@ -32,12 +32,13 @@ const getDevHost = () => {
 };
 
 // Android Emulator: 10.0.2.2 points to the host machine.
+const DEV_HOST = getDevHost();
 const API_HOST =
   Platform.OS === 'android'
-    ? (Constants.isDevice ? getDevHost() ?? 'localhost' : '10.0.2.2')
+    ? (DEV_HOST && DEV_HOST !== 'localhost' ? DEV_HOST : (Constants.isDevice ? DEV_HOST ?? 'localhost' : '10.0.2.2'))
     : Platform.OS === 'web'
       ? 'localhost'
-      : getDevHost() ?? 'localhost';
+      : DEV_HOST ?? 'localhost';
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? `http://${API_HOST}:5000/api`; // Update with production URL as needed

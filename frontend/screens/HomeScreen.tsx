@@ -108,7 +108,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Happy',
     description: 'Feel-good adventures',
     genres: ['Comedy', 'Adventure', 'Animation'],
-    accent: '#f6a326',
+    accent: '#FFC107',
     keywords: ['happy', 'joy', 'celebrate', 'ecstatic', 'optimistic'],
   },
   {
@@ -116,7 +116,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Excited',
     description: 'High-energy crowd pleasers',
     genres: ['Action', 'Adventure', 'Music'],
-    accent: '#ff4db8',
+    accent: '#9C27B0',
     keywords: ['excited', 'pumped', 'thrilled', 'energetic', 'party'],
   },
   {
@@ -124,7 +124,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Calm',
     description: 'Cozy slow stories',
     genres: ['Drama', 'Slice of life'],
-    accent: '#4ab5cb',
+    accent: '#00BCD4',
     keywords: ['calm', 'peaceful', 'relaxed', 'chill', 'serene'],
   },
   {
@@ -132,7 +132,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Romantic',
     description: 'Heartfelt connections',
     genres: ['Romance', 'Drama'],
-    accent: '#ff6f61',
+    accent: '#FF6B9D',
     keywords: ['romantic', 'love', 'date', 'affection', 'caring'],
   },
   {
@@ -140,7 +140,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Blue',
     description: 'Comforting narratives',
     genres: ['Romance', 'Drama'],
-    accent: '#7a6ad8',
+    accent: '#3F51B5',
     keywords: ['sad', 'down', 'lonely', 'blue', 'upset'],
   },
   {
@@ -148,7 +148,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Stressed',
     description: 'Light escape picks',
     genres: ['Animation', 'Family', 'Comedy'],
-    accent: '#ef5c4d',
+    accent: '#FF5722',
     keywords: ['stressed', 'overwhelmed', 'tired', 'burned out', 'drained'],
   },
   {
@@ -156,7 +156,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Angry',
     description: 'Cathartic releases',
     genres: ['Thriller', 'Crime', 'Action'],
-    accent: '#d7263d',
+    accent: '#C62828',
     keywords: ['angry', 'mad', 'furious', 'frustrated', 'rage'],
   },
   {
@@ -164,7 +164,7 @@ const MOOD_PRESETS: MoodPreset[] = [
     label: 'Bold',
     description: 'High-energy thrills',
     genres: ['Action', 'Sci-Fi'],
-    accent: '#2f95dc',
+    accent: '#1565C0',
     keywords: ['bold', 'fearless', 'hyped', 'adrenaline', 'charged'],
   },
 ];
