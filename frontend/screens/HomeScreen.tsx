@@ -53,6 +53,11 @@ type MoodMovie = MoodRecommendation & {
   ratingCount?: number;
 };
 
+type RecommendationReason = {
+  key: string;
+  label: string;
+};
+
 type MoodPreset = {
   id: string;
   label: string;
@@ -215,6 +220,40 @@ const normalizeRecommendationResponse = (payload: MoodRecommendationResponse): M
     return payload.results as MoodMovie[];
   }
   return [];
+};
+
+const getRecommendationReasons = (
+  movie: MoodMovie,
+  moodDetails: MoodPreset | null
+): RecommendationReason[] => {
+  const reasons: RecommendationReason[] = [];
+
+  const genres = Array.isArray(movie.genres)
+    ? movie.genres.map((genre) => String(genre).toLowerCase())
+    : [];
+  const moodGenres = moodDetails?.genres?.map((genre) => genre.toLowerCase()) ?? [];
+  const hasMoodGenreMatch = genres.some((genre) => moodGenres.includes(genre));
+  if (hasMoodGenreMatch) {
+    reasons.push({ key: 'mood-genre', label: 'Mood genre match' });
+  }
+
+  if (typeof movie.rating === 'number' && movie.rating >= 7.5) {
+    reasons.push({ key: 'strong-rating', label: 'Strong rating' });
+  }
+
+  if (typeof movie.ratingCount === 'number' && movie.ratingCount >= 50) {
+    reasons.push({ key: 'high-confidence', label: 'Community confidence' });
+  }
+
+  if (typeof movie.moodScore === 'number' && movie.moodScore >= 0.7) {
+    reasons.push({ key: 'high-match', label: 'High mood match' });
+  }
+
+  if (reasons.length === 0 && movie.moodTag) {
+    reasons.push({ key: 'mood-fit', label: `Fits ${movie.moodTag} mood` });
+  }
+
+  return reasons.slice(0, 3);
 };
 
 const detectMoodFromText = (text: string) => {
@@ -557,6 +596,7 @@ const HomeScreen = () => {
   const renderRecommendationCard = (item: MoodMovie) => {
     const numericId = resolveNumericId(item.id as number | string | null | undefined);
     const isSaved = numericId ? watchlistIds.has(numericId) : false;
+    const reasons = getRecommendationReasons(item, resolvedMoodDetails);
     return (
       <View
         key={`mood-${item.id}`}
@@ -598,6 +638,17 @@ const HomeScreen = () => {
           <Text style={[styles.recoMeta, { color: mutedText }]} numberOfLines={1}>
             {new Date(item.release_date).getFullYear()}
           </Text>
+        ) : null}
+        {reasons.length > 0 ? (
+          <View style={styles.reasonChipRow}>
+            {reasons.map((reason) => (
+              <View key={`${item.id}-${reason.key}`} style={styles.reasonChip}>
+                <Text style={[styles.reasonChipText, { color: colors.text }]} numberOfLines={1}>
+                  {reason.label}
+                </Text>
+              </View>
+            ))}
+          </View>
         ) : null}
       </View>
     );
@@ -740,7 +791,17 @@ const HomeScreen = () => {
           {recommendationsLoading ? (
             <ActivityIndicator color={colors.tint} />
           ) : recommendationsError ? (
-            <Text style={[styles.emptyText, { color: mutedText }]}>{recommendationsError}</Text>
+            <View style={styles.errorWrap}>
+              <Text style={[styles.emptyText, { color: mutedText }]}>{recommendationsError}</Text>
+              <TouchableOpacity
+                onPress={() => resolvedMood && loadMoodRecommendations(resolvedMood, selectedMood ? 'preset' : 'text', Date.now())}
+                disabled={!resolvedMood}
+                style={[styles.retryButton, { borderColor: colors.tint }]}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.retryButtonText, { color: colors.tint }]}>Try again</Text>
+              </TouchableOpacity>
+            </View>
           ) : recommendedMovies.length === 0 ? (
             <Text style={[styles.emptyText, { color: mutedText }]}>Select or describe a mood, then pull down to refresh once the server is running.</Text>
           ) : (
@@ -949,8 +1010,41 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   recoMeta: { marginTop: 4, fontSize: 12 },
+  reasonChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  reasonChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cfd8e3',
+    backgroundColor: '#f3f6fb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  reasonChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   trendingSection: { minHeight: 260 },
   watchlistNotice: { fontSize: 12, marginBottom: 8, textAlign: 'center' },
+  errorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    rowGap: 10,
+  },
+  retryButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  retryButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });
 
 export default HomeScreen;
