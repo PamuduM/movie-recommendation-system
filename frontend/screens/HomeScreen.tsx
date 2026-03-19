@@ -280,6 +280,11 @@ const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist, fallba
   const resolvedUri = useMemo(() => resolvePosterUri(uri), [uri]);
   const showToggle = typeof onToggleWatchlist === 'function';
 
+  useEffect(() => {
+    // Retry rendering for new image sources after a previous failure.
+    setFailed(false);
+  }, [resolvedUri]);
+
   return (
     <View style={styles.posterWrapper}>
       {resolvedUri && !failed ? (
@@ -293,14 +298,18 @@ const Poster = ({ uri, title, watchlisted, toggleBusy, onToggleWatchlist, fallba
         <TouchableOpacity
           style={[
             styles.watchlistToggle,
+            watchlisted && styles.watchlistToggleActive,
             toggleBusy && styles.watchlistToggleDisabled,
           ]}
           onPress={onToggleWatchlist ?? undefined}
           activeOpacity={0.85}
           disabled={toggleBusy}
+          accessibilityRole="button"
+          accessibilityLabel={watchlisted ? `Remove ${title} from watchlist` : `Add ${title} to watchlist`}
+          accessibilityHint="Double tap to toggle watchlist status"
         >
           <Ionicons
-            name="heart-outline"
+            name={watchlisted ? 'heart' : 'heart-outline'}
             size={20}
             color={watchlisted ? '#0d6efd' : '#ffffff'}
           />
@@ -723,6 +732,9 @@ const HomeScreen = () => {
                   ]}
                   onPress={() => handleMoodSelect(preset.id)}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${preset.label} mood`}
+                  accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[styles.chipLabel, { color: chipLabelColor }]}>{preset.label}</Text>
                   <Text style={[styles.chipGenres, { color: chipDescriptionColor }]} numberOfLines={1}>
@@ -740,11 +752,16 @@ const HomeScreen = () => {
               placeholderTextColor={mutedText}
               style={[styles.textInput, { color: colors.text }]}
               multiline
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={handleAnalyzeText}
             />
             <TouchableOpacity
               style={[styles.primaryButton, { backgroundColor: colors.tint }]}
               onPress={handleAnalyzeText}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Analyze mood text"
             >
               <Text style={[styles.primaryButtonText, { color: binaryTextColor }]}>Analyze</Text>
             </TouchableOpacity>
@@ -858,6 +875,14 @@ const HomeScreen = () => {
               contentContainerStyle={styles.listContent}
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.6}
+              initialNumToRender={6}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              getItemLayout={(_, index) => ({
+                length: TRENDING_CARD_WIDTH + HORIZONTAL_CARD_GAP,
+                offset: (TRENDING_CARD_WIDTH + HORIZONTAL_CARD_GAP) * index,
+                index,
+              })}
               ListEmptyComponent={
                 <View style={styles.center}>
                   <Text style={[styles.emptyText, { color: mutedText }]}>
@@ -951,6 +976,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  watchlistToggleActive: { backgroundColor: 'rgba(255,255,255,0.96)' },
   watchlistToggleDisabled: { opacity: 0.6 },
   movieTitle: { marginTop: 10, fontSize: 14, fontWeight: '600' },
   movieMeta: { marginTop: 4, fontSize: 12 },
