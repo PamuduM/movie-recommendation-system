@@ -64,10 +64,10 @@ export const setUnauthorizedHandler = (handler: UnauthorizedHandler | null) => {
 const axiosRetry = require('axios-retry');
 axiosRetry(api, {
   retries: 2,
-  retryDelay: axiosRetry.exponentialDelay,
+  retryDelay: (retryCount) => retryCount * 1000, // Exponential delay: 1s, 2s, etc.
   retryCondition: (error) => {
-    return axiosRetry.isNetworkOrIdempotentRequestError(error) &&
-      !error?.response?.data?.error; // Don't retry on client errors (400/401/403, etc.)
+    // Retry on network errors or 5xx server errors
+    return !error.response || (error.response.status >= 500 && error.response.status < 600);
   },
 });
 
